@@ -1,6 +1,8 @@
 server:
   port: ${server.port}
 spring:
+  profiles:
+    active: dev
   application:
     name: ${spring.application.name}
   datasource:

@@ -30,21 +30,20 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
     private StringRedisTemplate stringRedisTemplate;
     @Override
     public Result queryList() {
-
+    //TODO 以后用zSet改一下
         String key= RedisConstants.CACHE_SHOPTYPE_KEY;
         String value = stringRedisTemplate.opsForValue().get(key);
         //先查缓存看是否存在
         if(!StringUtil.isNullOrEmpty(value)){
             List<ShopType> list = JSONUtil.toList(value, ShopType.class);
     return Result.ok(list);
-        }//
+        }//不存在则查数据然后插入缓存中
         List<ShopType>list=query().list();
         if (list==null||list.size()==0){
             return Result.fail("商店种类加载错误");
         }
         for (ShopType shopType:list){
-            stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shopType));
-            stringRedisTemplate.expire(key,30, TimeUnit.MINUTES);
+            stringRedisTemplate.opsForList().rightPush(RedisConstants.CACHE_SHOPTYPE_KEY,JSONUtil.toJsonStr(shopType));
         }
         return Result.ok(list);
     }
