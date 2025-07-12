@@ -1,6 +1,13 @@
 server:
   port: ${server.port}
+  tomcat:
+    threads:
+      max: ${server.tomcat.threads.max}
+    max-connections: ${server.tomcat.max-connections}
+    accept-count: ${server.tomcat.accept-count}
+
 spring:
+
   profiles:
     active: dev
   application:

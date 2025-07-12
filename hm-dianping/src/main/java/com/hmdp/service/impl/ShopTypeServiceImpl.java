@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -32,10 +33,14 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
     public Result queryList() {
     //TODO 以后用zSet改一下
         String key= RedisConstants.CACHE_SHOPTYPE_KEY;
-        String value = stringRedisTemplate.opsForValue().get(key);
+        List<String> value = stringRedisTemplate.opsForList().range(key,0,-1);
         //先查缓存看是否存在
-        if(!StringUtil.isNullOrEmpty(value)){
-            List<ShopType> list = JSONUtil.toList(value, ShopType.class);
+        if(value!=null&&value.size()>0){
+            List<ShopType> list = new ArrayList<>();
+            for (String s : value) {
+                ShopType shopType = JSONUtil.toBean(s, ShopType.class);
+                list.add(shopType);
+            }
     return Result.ok(list);
         }//不存在则查数据然后插入缓存中
         List<ShopType>list=query().list();
