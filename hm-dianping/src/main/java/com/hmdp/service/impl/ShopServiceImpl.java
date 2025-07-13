@@ -42,6 +42,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private Shop queryWithLock(Long id) {
         String key= RedisConstants.CACHE_SHOP_KEY +id;
         String shopJson= stringRedisTemplate.opsForValue().get(key);
+
         if(StrUtil.isNotBlank(shopJson)){
             return JSONUtil.toBean(shopJson, Shop.class, false);
         }
@@ -93,13 +94,28 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop),RedisConstants.CACHE_SHOP_TTL,TimeUnit.MINUTES);
         return shop;
     }
-    private boolean tryLock(String key){
-        Boolean flag=stringRedisTemplate.opsForValue().setIfAbsent(key,"1",RedisConstants.LOCK_SHOP_TTL,TimeUnit.MINUTES);
+
+    private boolean tryLock(String key) {
+        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", RedisConstants.LOCK_SHOP_TTL, TimeUnit.SECONDS);
+        // 拆箱要判空，防止NPE
         return BooleanUtil.isTrue(flag);
     }
-    private void unlock(String key){
-            stringRedisTemplate.delete(key);
+
+    /**
+     * 释放锁
+     *
+     * @param key
+     */
+    private void unlock(String key) {
+        stringRedisTemplate.delete(key);
     }
+//    private boolean tryLock(String key){
+//        Boolean flag=stringRedisTemplate.opsForValue().setIfAbsent(key,"1",RedisConstants.LOCK_SHOP_TTL,TimeUnit.MINUTES);
+//        return BooleanUtil.isTrue(flag);
+//    }
+//    private void unlock(String key){
+//            stringRedisTemplate.delete(key);
+//    }
     @Override
     @Transactional
     public Result updateShop(Shop shop) {
