@@ -2,19 +2,25 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisConstants;
+import com.hmdp.utils.RedisData;
 import io.netty.util.internal.StringUtil;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -30,10 +36,13 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private CacheClient cacheClient;
         @Override
     public Result queryById(Long id) {
-        //
-            Shop shop = queryWithLock(id);
+        //互斥锁实现
+            //Shop shop = queryWithLock(id);
+            Shop shop = cacheClient.queryWithLogicExpire(RedisConstants.CACHE_SHOP_KEY,id,Shop.class,this::getById,20L,TimeUnit.SECONDS);
             if (shop == null) {
                 return Result.fail("店铺不存在");
             }
@@ -72,6 +81,35 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             throw new RuntimeException(e);
         } finally {
             unlock(lockKey);
+        }
+        return shop;
+    }
+    private static final ExecutorService CACHE_REBUILD_THREAD_POOL = Executors.newFixedThreadPool(10);
+    private Shop queryShopWithLogicExpire(Long id){
+        String key= RedisConstants.CACHE_SHOP_KEY +id;
+        String redisData= stringRedisTemplate.opsForValue().get(key);
+
+        if (StrUtil.isBlank(redisData)) {
+            return null;
+        }
+            String lockKey=RedisConstants.LOCK_SHOP_KEY+id;
+            RedisData redisData1= JSONUtil.toBean(redisData, RedisData.class);
+            LocalDateTime time=LocalDateTime.now();
+            Shop shop=JSONUtil.toBean((JSONObject) redisData1.getData(), Shop.class);
+            if(time.isBefore(redisData1.getExpireTime())){
+                return shop;
+            }
+            boolean isLock=tryLock(lockKey);
+            if(isLock){
+    CACHE_REBUILD_THREAD_POOL.submit(()->{
+        try {
+            this.saveShopRedis(id,1800L);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            unlock(lockKey);
+        }
+    });
         }
         return shop;
     }
@@ -126,5 +164,24 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         updateById(shop);
         stringRedisTemplate.delete(RedisConstants.CACHE_SHOP_KEY+id);
         return Result.ok();
+    }
+
+    /**
+     * 设置逻辑过期时间,为热点key设置
+     * @param id
+     * @param expireSeconds
+     */
+    public void saveShopRedis(Long id, Long expireSeconds) {
+        Shop shop = getById(id);
+        try {
+            //线程休眠不要太长了，不然数据不明显
+            Thread.sleep(20);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        RedisData redisData=new RedisData();
+        redisData.setData(shop);
+        redisData.setExpireTime(LocalDateTime.now().plusSeconds(expireSeconds));
+        stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY+id,JSONUtil.toJsonStr(redisData));
     }
 }
