@@ -35,7 +35,7 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
         String key= RedisConstants.CACHE_SHOPTYPE_KEY;
         List<String> value = stringRedisTemplate.opsForList().range(key,0,-1);
         //先查缓存看是否存在
-        if(value!=null&&value.size()>0){
+        if(value!=null&& !value.isEmpty()){
             List<ShopType> list = new ArrayList<>();
             for (String s : value) {
                 ShopType shopType = JSONUtil.toBean(s, ShopType.class);
@@ -44,7 +44,7 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
     return Result.ok(list);
         }//不存在则查数据然后插入缓存中
         List<ShopType>list=query().list();
-        if (list==null||list.size()==0){
+        if (list==null|| list.isEmpty()){
             return Result.fail("商店种类加载错误");
         }
         for (ShopType shopType:list){

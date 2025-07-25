@@ -8,8 +8,12 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +37,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedisIdWorker redisIdWorker;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private RedissonClient redissonClient;
+    private static final String KEY_PREFIX="order:";
     /**
      * jmeter测试的时候选内容编码一定不要加空格，不然会识别失败
      * @param voucherId
@@ -55,10 +64,30 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         /**
          * 注意事务失效，这里采用找代理解决，上网查一查吧
          */
-        synchronized (userId.toString().intern()) {
+
+        /**
+         * 两个项目启动的话会有两台不同的jvm机，因而锁监视器不共享
+         * 这里采用分布式锁来处理
+         */
+//        SimpleRedisLock simpleRedisLock = new SimpleRedisLock( stringRedisTemplate,KEY_PREFIX + userId);
+        RLock simpleRedisLock = redissonClient.getLock(KEY_PREFIX + userId);
+        boolean isLock = simpleRedisLock.tryLock();
+        /**
+         * 能触发失败也就说明同一用户有多个线程
+         */
+        if(!isLock){
+            return Result.fail("不允许重复下单");
+        }
+        //synchronized (userId.toString().intern()) {
+        try {
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            simpleRedisLock.unlock();
         }
+        //}
     }
     @Transactional
     public Result createVoucherOrder(Long voucherId) {
