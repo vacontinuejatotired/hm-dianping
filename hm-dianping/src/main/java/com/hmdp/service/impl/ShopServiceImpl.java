@@ -85,34 +85,34 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return shop;
     }
     private static final ExecutorService CACHE_REBUILD_THREAD_POOL = Executors.newFixedThreadPool(10);
-    private Shop queryShopWithLogicExpire(Long id){
-        String key= RedisConstants.CACHE_SHOP_KEY +id;
-        String redisData= stringRedisTemplate.opsForValue().get(key);
-
-        if (StrUtil.isBlank(redisData)) {
-            return null;
-        }
-            String lockKey=RedisConstants.LOCK_SHOP_KEY+id;
-            RedisData redisData1= JSONUtil.toBean(redisData, RedisData.class);
-            LocalDateTime time=LocalDateTime.now();
-            Shop shop=JSONUtil.toBean((JSONObject) redisData1.getData(), Shop.class);
-            if(time.isBefore(redisData1.getExpireTime())){
-                return shop;
-            }
-            boolean isLock=tryLock(lockKey);
-            if(isLock){
-    CACHE_REBUILD_THREAD_POOL.submit(()->{
-        try {
-            this.saveShopRedis(id,1800L);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            unlock(lockKey);
-        }
-    });
-        }
-        return shop;
-    }
+//    private Shop queryShopWithLogicExpire(Long id){
+//        String key= RedisConstants.CACHE_SHOP_KEY +id;
+//        String redisData= stringRedisTemplate.opsForValue().get(key);
+//
+//        if (StrUtil.isBlank(redisData)) {
+//            return null;
+//        }
+//            String lockKey=RedisConstants.LOCK_SHOP_KEY+id;
+//            RedisData redisData1= JSONUtil.toBean(redisData, RedisData.class);
+//            LocalDateTime time=LocalDateTime.now();
+//            Shop shop=JSONUtil.toBean((JSONObject) redisData1.getData(), Shop.class);
+//            if(time.isBefore(redisData1.getExpireTime())){
+//                return shop;
+//            }
+//            boolean isLock=tryLock(lockKey);
+//            if(isLock){
+//    CACHE_REBUILD_THREAD_POOL.submit(()->{
+//        try {
+//            this.saveShopRedis(id,1800L);
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        } finally {
+//            unlock(lockKey);
+//        }
+//    });
+//        }
+//        return shop;
+//    }
     private Shop queryShopById(Long id){
         String key= RedisConstants.CACHE_SHOP_KEY +id;
         String shopJson= stringRedisTemplate.opsForValue().get(key);

@@ -30,7 +30,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
-    private static final String VOUCHER_STOCK_KEY_PREFIX = "voucher:stock:";
+    private static final String VOUCHER_STOCK_KEY_PREFIX = "seckill:stock:";
 
     @Override
     public Result queryVoucherOfShop(Long shopId) {
