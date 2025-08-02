@@ -36,7 +36,6 @@ public class CacheClient {
         String key= keyPrefix +id;
         String Json= stringRedisTemplate.opsForValue().get(key);
         if(StrUtil.isNotBlank(Json)){
-
             return JSONUtil.toBean(Json, clazz, false);
         }
         //判断命中的是不是空值
@@ -55,22 +54,30 @@ public class CacheClient {
     public <R,ID> R queryWithLogicExpire(String keyPrefix,ID id,Class<R> clazz,Function<ID,R> dbFallBack,Long time1, TimeUnit timeUnit) {
         String key= keyPrefix+id;
         String redisData= stringRedisTemplate.opsForValue().get(key);
-
+        //查数据库，看是否为空值
         if (StrUtil.isBlank(redisData)) {
+            R result = dbFallBack.apply(id);  // 查数据库
+            if(result != null) {
+                this.setWithLogicalExpire(key, result, time1, timeUnit);
+            }
             return null;
         }
         String lockKey=RedisConstants.LOCK_SHOP_KEY+id;
+        //拿到redisData
         RedisData redisData1= JSONUtil.toBean(redisData, RedisData.class);
         LocalDateTime time=LocalDateTime.now();
+        //拿到数据
         R r=JSONUtil.toBean((JSONObject) redisData1.getData(), clazz);
         if(time.isBefore(redisData1.getExpireTime())){
             return r;
         }
+        //拿锁
         boolean isLock=tryLock(lockKey);
         if(isLock){
             CACHE_REBUILD_THREAD_POOL.submit(()->{
                 try {
                     R result=dbFallBack.apply(id);
+             //设置逻辑过期时间
                     this.setWithLogicalExpire(key,result,time1,timeUnit);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
