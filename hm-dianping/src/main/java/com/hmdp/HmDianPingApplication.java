@@ -7,7 +7,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 @MapperScan("com.hmdp.mapper")
 @SpringBootApplication
-@EnableAspectJAutoProxy(exposeProxy = true)
+@EnableAspectJAutoProxy(exposeProxy = true,proxyTargetClass = true)
 public class HmDianPingApplication {
     public static void main(String[] args) {
         SpringApplication.run(HmDianPingApplication.class, args);

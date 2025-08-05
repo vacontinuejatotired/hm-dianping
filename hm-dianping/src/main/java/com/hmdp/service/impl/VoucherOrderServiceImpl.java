@@ -12,11 +12,13 @@ import com.hmdp.service.IVoucherService;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
+import io.lettuce.core.RedisBusyException;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -72,8 +74,60 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @PostConstruct
     public void init() {
         log.info("异步秒杀线程池启动");
-        log.info("初始化代理对象{}",AopContext.currentProxy());
-        this.proxy= (IVoucherOrderService) AopContext.currentProxy();
+        log.info("开始初始化Redis Stream消费者组...");
+        String streamKey = "stream.orders";
+        String groupName = "g1";
+        String lockKey = streamKey + ":group_init_lock";
+
+        try {
+            // 1. 尝试获取分布式锁（设置30秒过期）
+            Boolean lockAcquired = stringRedisTemplate.opsForValue()
+                    .setIfAbsent(lockKey, "locked", 30, TimeUnit.SECONDS);
+
+            if (Boolean.TRUE.equals(lockAcquired)) {
+                try {
+                    // 2. 检查流是否存在
+                    if (Boolean.FALSE.equals(stringRedisTemplate.hasKey(streamKey))) {
+                        // 创建空流（等效于MKSTREAM）
+                        Map<String, String> dummyData = Map.of("__init__", "dummy_value");
+                        stringRedisTemplate.opsForStream().add(streamKey, dummyData);
+                        log.info("创建新Stream: {}", streamKey);
+                    }
+
+                    // 3. 尝试创建消费者组
+                    try {
+                        stringRedisTemplate.opsForStream().createGroup(
+                                streamKey,
+                                ReadOffset.from("0"),
+                                groupName
+
+                        );
+                        log.info("成功创建消费者组: {}/{}", streamKey, groupName);
+                    } catch (Exception e) {
+                        //有些异常是灰色的，不能直接log出来，需要拿原因来判断
+                        Throwable rootCause = e.getCause(); // 获取最底层原因
+                        if (rootCause instanceof RedisBusyException) {
+                            log.info("业务提示：{}", rootCause.getMessage()); // 友好提示
+                        } else {
+                            log.error("系统错误", e); // 真实错误仍报警
+                        }
+                    }
+                } finally {
+                    // 4. 释放锁
+                    try {
+                        stringRedisTemplate.delete(lockKey);
+                    } catch (Exception e) {
+                        log.warn("释放锁失败", e);
+                    }
+                }
+            } else {
+                log.info("其他节点正在初始化消费者组，跳过初始化");
+            }
+        } catch (Exception e) {
+            log.error("初始化消费者组异常", e);
+        }
+
+
         log.info("线程池状态: shutdown={}, terminated={}",
                 secKillThreadPool.isShutdown(),
                 secKillThreadPool.isTerminated());
@@ -199,7 +253,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail(r == 1 ? "库存不足" : "不能重复下单");
         }
         //警示！！代理对象要变成全局使用的
-        //proxy = (IVoucherOrderService) AopContext.currentProxy();
+        //TODO 集群下目前只会有一个会有代理对象，需要解决
+        proxy = (IVoucherOrderService) AopContext.currentProxy();
         //返回订单号
         return Result.ok(orderId);
     }

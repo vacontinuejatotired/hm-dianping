@@ -25,6 +25,7 @@ public class UploadController {
             // 生成新文件名
             String fileName = createNewFileName(originalFilename);
             // 保存文件
+            //TODO 这里保存到前端服务器，其实应该保存到文件服务器的
             image.transferTo(new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName));
             // 返回结果
             log.debug("文件上传成功，{}", fileName);
