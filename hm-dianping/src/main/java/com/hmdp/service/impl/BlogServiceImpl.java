@@ -5,19 +5,24 @@ import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.ScrollResult;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
+import com.hmdp.entity.Follow;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.BlogMapper;
 import com.hmdp.service.IBlogService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SystemConstants;
 import com.hmdp.utils.UserHolder;
 import jodd.util.StringUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -33,9 +38,12 @@ import java.util.stream.Collectors;
  * @since 2021-12-22
  */
 @Service
+@Slf4j
 public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IBlogService {
     @Resource
     private IUserService userService;
+    @Resource
+    private IFollowService followService;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
@@ -45,11 +53,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         if (blog == null) {
             return Result.fail("博客不存在");
         }
-        Long userId = blog.getUserId();
-        User user1 = userService.getById(userId);
-        blog.setUserId(userId);
-        blog.setIcon(user1.getIcon());
-
+        setUserToBlog(blog);
+        isLiked(blog);
         return Result.ok(blog);
     }
 
@@ -123,11 +128,73 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
         List<UserDTO> userDTOS = userService.query()
                 .in("id", userDTOList)
-                .last("order by field (id,"+idStr+")")
+                .last("order by field (id," + idStr + ")")
                 .list()
                 .stream()
                 .map(user -> BeanUtil.copyProperties(user, UserDTO.class))
                 .toList();
         return Result.ok(userDTOS);
+    }
+
+    @Override
+    public Result saveBlog(Blog blog) {
+        UserDTO user = UserHolder.getUser();
+        blog.setUserId(user.getId());
+        boolean isSuccess = save(blog);
+        if (!isSuccess) {
+            return Result.fail("新增笔记失败");
+        }
+        //拿到所有的粉丝账号id
+        List<Follow> followsUserId = followService.query().eq("follow_user_id", user.getId()).list();
+        for (Follow follow : followsUserId) {
+            Long userId = follow.getUserId();
+            String key = "feed:" + userId;
+            stringRedisTemplate.opsForZSet().add(key, blog.getId().toString(), System.currentTimeMillis());
+        }
+        return Result.ok();
+    }
+
+    @Override
+    public Result queryBlogOfFollow(Long max, Integer offset) {
+        //拿到最小时间戳
+        int pageSize = SystemConstants.MAX_PAGE_SIZE;
+        String key = "feed:"+UserHolder.getUser().getId();
+        ScrollResult result = new ScrollResult();
+        Set<ZSetOperations.TypedTuple<String>> scores = stringRedisTemplate.opsForZSet().rangeByScoreWithScores(key,0, max, offset,2);
+        if(scores == null || scores.isEmpty()) {
+            return Result.ok();
+        }
+        long min=0;
+        List<Long>ids=new ArrayList<>(scores.size());
+        int os=1;
+        for (ZSetOperations.TypedTuple<String> score : scores) {
+            Double scoreScore = score.getScore();
+            ids.add(Long.valueOf(Objects.requireNonNull(score.getValue())));
+            long time= Objects.requireNonNull(score.getScore()).longValue();
+            //统计最小时间时的相同个数
+            //注意已经提前降序排序
+            if (time ==min){
+            os++;
+            }
+            else if(time<min){
+                min=time;
+                os=1;
+            }
+        }
+        String idStr=StringUtil.join(ids, ",");
+        List<Blog> blogList = query().in("id", ids).
+                last("order by field(id," + idStr + ")")
+                .list();
+        log.info("已查询到博客");
+        for (Blog blog : blogList) {
+        setUserToBlog(blog);
+        isLiked(blog);
+        }
+        result.setOffset(os);
+        result.setMinTime(min);
+        result.setList(blogList);
+        log.info("即将返回页面对象{}",result);
+
+        return Result.ok(result);
     }
 }

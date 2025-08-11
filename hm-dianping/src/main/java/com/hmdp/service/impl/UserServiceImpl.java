@@ -14,7 +14,10 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.UserHolder;
+import io.lettuce.core.BitFieldArgs;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -58,14 +62,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String tempCode = stringRedisTemplate.opsForValue().get(RedisConstants.LOGIN_CODE_KEY + phone);
         if (code == null || !code.equals(tempCode)) {
             log.info("传入验证码{}，实际验证码{}", loginForm.getCode(), tempCode);
-
             return Result.fail("验证码错误");
         }
         String token = UUID.randomUUID().toString();
-
         User user = new User();
         user = query().eq("phone", phone).one();
-
         if (user == null) {
             log.info("phone={}的用户不存在", phone);
             try {
@@ -88,6 +89,50 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USER_KEY + token, stringObjectMap);
         stringRedisTemplate.expire(RedisConstants.LOGIN_USER_KEY + token, 30, TimeUnit.MINUTES);
         return Result.ok(token);
+    }
+
+    @Override
+    public Result sign() {
+        UserDTO user = UserHolder.getUser();
+        LocalDateTime now = LocalDateTime.now();
+        String YearMonth=now.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+        String key= YearMonth+user.getId()+RedisConstants.USER_SIGN_KEY;
+        int dayOfMonth=now.getDayOfMonth();
+        stringRedisTemplate.opsForValue().setBit(key,dayOfMonth-1,true);
+        return Result.ok();
+    }
+
+    @Override
+    public Result getSignCount() {
+        UserDTO user = UserHolder.getUser();
+        LocalDateTime now = LocalDateTime.now();
+        String YearMonth=now.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+        String key= YearMonth+user.getId()+RedisConstants.USER_SIGN_KEY;
+        int dayOfMonth=now.getDayOfMonth();
+        List<Long> bitField = stringRedisTemplate.opsForValue().bitField(key,
+                BitFieldSubCommands.create()
+                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth))
+                        .valueAt(0));
+        if (bitField == null || bitField.isEmpty()) {
+            return Result.ok(0);
+        }
+        Long num = bitField.get(0);
+        if (num == null || num == 0) {
+            return Result.ok(0);
+        }
+        int count = 0;
+        while (true){
+            if ((num & 1) == 0) {
+                //代表未签到
+                break;
+            }
+            else {
+                count++;
+            }
+            //无符号右移
+            num>>>=1;
+        }
+        return Result.ok(count);
     }
 
     @Override

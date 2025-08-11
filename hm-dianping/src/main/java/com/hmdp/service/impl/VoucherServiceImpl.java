@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * <p>
- *  服务实现类
+ * 服务实现类
  * </p>
  *
  * @author 虎哥
@@ -52,6 +52,6 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         seckillVoucher.setBeginTime(voucher.getBeginTime());
         seckillVoucher.setEndTime(voucher.getEndTime());
         seckillVoucherService.save(seckillVoucher);
-        stringRedisTemplate.opsForValue().set(VOUCHER_STOCK_KEY_PREFIX+voucher.getId(),voucher.getStock().toString());
+        stringRedisTemplate.opsForValue().set(VOUCHER_STOCK_KEY_PREFIX + voucher.getId(), voucher.getStock().toString());
     }
 }
