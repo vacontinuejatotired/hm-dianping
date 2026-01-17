@@ -20,12 +20,17 @@ import com.hmdp.utils.SystemConstants;
 import com.hmdp.utils.UserHolder;
 import jodd.util.StringUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.client.protocol.RedisCommand;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -97,6 +102,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         Long userId = UserHolder.getUser().getId();
         String key = RedisConstants.BLOG_LIKED_KEY + id;
         Double score = stringRedisTemplate.opsForZSet().score(key, userId.toString());
+
         if (score == null) {
             //更新数据库
             boolean update = update().setSql("liked = liked + 1").eq("id", id).update();
@@ -151,7 +157,30 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             String key = "feed:" + userId;
             stringRedisTemplate.opsForZSet().add(key, blog.getId().toString(), System.currentTimeMillis());
         }
+//        pushBloToFansBatch(followsUserId, blog.getId());
         return Result.ok();
+    }
+    //抽取方法，实现批量插入，防止N次连接
+    private void  pushBloToFansBatch(List<Follow> follows,Long blogId) {
+        if (follows == null || follows.isEmpty()) {
+            log.info("Empty follows");
+            return;
+        }
+        stringRedisTemplate.executePipelined((RedisCallback<Object>) connect ->{
+            Long followUserId ;
+            double now = System.currentTimeMillis();
+            String key;
+            byte []keyByte;
+            byte []valueByte= blogId.toString().getBytes();
+        for (Follow follow : follows) {
+            followUserId = follow.getUserId();
+            key = "feed:"+followUserId;
+            keyByte = key.getBytes(StandardCharsets.UTF_8);
+            connect.zAdd(keyByte,now,valueByte);
+        }
+      return null;
+        } );
+        return ;
     }
 
     @Override
