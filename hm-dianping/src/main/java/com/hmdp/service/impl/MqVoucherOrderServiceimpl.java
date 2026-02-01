@@ -8,11 +8,10 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.utils.RabbitMqConstants;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.AmqpAdmin;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueInformation;
+import net.bytebuddy.implementation.bind.annotation.Default;
+import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitMessagingTemplate;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -25,6 +24,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
+import java.util.HashMap;
+import java.util.Map;
 
 
 @Service
@@ -44,14 +45,23 @@ public class MqVoucherOrderServiceimpl extends ServiceImpl<VoucherOrderMapper, V
     private AmqpAdmin amqpAdmin;
     @PostConstruct
     public void init(){
-        createQueue(RabbitMqConstants.QUEUE_NAME);
+        createExchange();
+        createQueue(RabbitMqConstants.QUEUE_NAME,);
         createQueue(RabbitMqConstants.DEAD_QUEUE_NAME);
     }
 
-    private void createQueue(String queueName) {
+    private void createExchange(String ExchangeName){
+        Exchange exchange = ExchangeBuilder.topicExchange(ExchangeName).durable(true).build();
+        amqpAdmin.declareExchange(exchange);
+        log.info("交换机声明成功{}",ExchangeName);
+    }
+
+    private void createQueue(String queueName, String routingKey, String exchange,  String exchangeName, String queueType) {
         QueueInformation exist= amqpAdmin.getQueueInfo(queueName) ;
         if(exist==null) {
             log.info("不存在队列{},即将添加",queueName);
+            Map<String,Object>argsMap = new HashMap<>();
+            Binding binding = new Binding();
             Queue queue =new Queue(queueName, true, false, false);
             queue.shouldDeclare();
             amqpAdmin.declareQueue(queue);
