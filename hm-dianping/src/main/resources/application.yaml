@@ -5,9 +5,13 @@ server:
       max: ${server.tomcat.threads.max}
     max-connections: ${server.tomcat.max-connections}
     accept-count: ${server.tomcat.accept-count}
-
 spring:
-
+  rabbitmq:
+    username: ${spring.rabbitmq.username}
+    password: ${spring.rabbitmq.password}
+    host: ${spring.rabbitmq.host}
+    port: ${spring.rabbitmq.port}
+    virtual-host: ${spring.rabbitmq.virtual-host}
   profiles:
     active: dev
   application:
@@ -35,3 +39,7 @@ logging:
   level:
     com.hmdp: debug
     org.springframework.data.redis: WARN
+management:
+  health:
+    rabbit:
+      enabled: ${management.health.rabbit.enabled}
