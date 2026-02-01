@@ -8,7 +8,8 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface AutoUpdateTime {
 
+public @interface AutoUpdateTime {
+    boolean printLog() default true;
 
 }
