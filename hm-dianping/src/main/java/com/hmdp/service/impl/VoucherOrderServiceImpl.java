@@ -1,6 +1,7 @@
 package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.lang.UUID;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.VoucherOrder;
@@ -13,6 +14,7 @@ import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import io.lettuce.core.RedisBusyException;
+import io.lettuce.core.RedisCommandExecutionException;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.stream.IntStream;
 
 /**
  * <p>
@@ -68,78 +71,212 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         REDIS_UNLOCK_SCRIPT.setResultType(Long.class);
         REDIS_UNLOCK_SCRIPT.setLocation(new ClassPathResource("Seckill.lua"));
     }
-    
-    
 
     //TODO这里怎么用的是单线程池
     private static final ExecutorService secKillThreadPool = Executors.newSingleThreadExecutor();
 
 
     @PostConstruct
-    public void init(){
+    public void init() {
         log.info("异步秒杀线程池启动");
 
+        final String streamKey = "stream.orders";
+        final String groupName = "g1";
+        final String lockKey = streamKey + ":group_init_lock";
+        final String lockValue = UUID.randomUUID().toString();
+
+        // 尝试获取分布式锁（60秒过期）
+        Boolean lockAcquired = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, lockValue, 60, TimeUnit.SECONDS);
+
+        if (Boolean.FALSE.equals(lockAcquired)) {
+            log.info("其他实例正在初始化消费者组，跳过本次初始化");
+            logThreadPoolStatus();
+            return;
+        }
+
+        try {
+            ensureStreamExists(streamKey);
+            ensureConsumerGroupExists(streamKey, groupName);
+            // 只有当前节点成功完成初始化，才启动消费者线程
+            log.info("消费者组初始化完成，启动 VoucherOrderHandler");
+            secKillThreadPool.submit(new VoucherOrderHandler());
+
+        } catch (Exception e) {
+            log.error("Redis Stream 初始化失败 [stream={}, group={}]", streamKey, groupName, e);
+            // 可选：根据业务决定是否需要告警、标记失败状态或重试
+        } finally {
+            releaseLockSafely(lockKey, lockValue);
+        }
+        logThreadPoolStatus();
     }
-    // @PostConstruct
-    // public void init() {
-        // log.info("异步秒杀线程池启动");
-        // log.info("开始初始化Redis Stream消费者组...");
-        // String streamKey = "stream.orders";
-        // String groupName = "g1";
-        // String lockKey = streamKey + ":group_init_lock";
 
-        // try {
-        //     // 1. 尝试获取分布式锁（设置30秒过期）
-        //     Boolean lockAcquired = stringRedisTemplate.opsForValue()
-        //             .setIfAbsent(lockKey, "locked", 30, TimeUnit.SECONDS);
+    /**
+     * 确保 Stream 存在，如果不存在则创建（使用 dummy entry）
+     */
+    private void ensureStreamExists(String streamKey) {
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(streamKey))) {
+            return;
+        }
 
-        //     if (Boolean.TRUE.equals(lockAcquired)) {
-        //         try {
-        //             // 2. 检查流是否存在
-        //             if (Boolean.FALSE.equals(stringRedisTemplate.hasKey(streamKey))) {
-        //                 // 创建空流（等效于MKSTREAM）
-        //                 Map<String, String> dummyData = Map.of("__init__", "dummy_value");
-        //                 stringRedisTemplate.opsForStream().add(streamKey, dummyData);
-        //                 log.info("创建新Stream: {}", streamKey);
-        //             }
+        try {
+            stringRedisTemplate.opsForStream()
+                    .add(streamKey, Map.of("__init__", "1"));
+            log.info("创建新的 Redis Stream: {}", streamKey);
+        } catch (Exception e) {
+            log.error("创建 Stream 失败: {}", streamKey, e);
+            throw new IllegalStateException("无法创建 Stream: " + streamKey, e);
+        }
+    }
 
-        //             // 3. 尝试创建消费者组
-        //             try {
-        //                 stringRedisTemplate.opsForStream().createGroup(
-        //                         streamKey,
-        //                         ReadOffset.from("0"),
-        //                         groupName
+    /**
+     * 确保消费者组存在（幂等操作）
+     */
+    private void ensureConsumerGroupExists(String streamKey, String groupName) {
+        StreamInfo.XInfoGroups groupsInfo;
+        try {
+            groupsInfo = stringRedisTemplate.opsForStream().groups(streamKey);
+        } catch (RedisCommandExecutionException e) {
+            String msg = e.getMessage();
+            if (msg != null && (msg.contains("NOGROUP") || msg.contains("key does not exist"))) {
+                // Stream 不存在已在前面处理，这里不应该走到
+                log.warn("查询消费者组时 Stream 不存在，已在前面创建: {}", streamKey);
+                return;
+            }
+            throw e;
+        }
 
-        //                 );
-        //                 log.info("成功创建消费者组: {}/{}", streamKey, groupName);
-        //             } catch (Exception e) {
-        //                 //有些异常是灰色的，不能直接log出来，需要拿原因来判断
-        //                 Throwable rootCause = e.getCause(); // 获取最底层原因
-        //                 if (rootCause instanceof RedisBusyException) {
-        //                     log.info("业务提示：{}", rootCause.getMessage()); // 友好提示
-        //                 } else {
-        //                     log.error("系统错误", e); // 真实错误仍报警
-        //                 }
-        //             }
-        //         } finally {
-        //             // 4. 释放锁
-        //             try {
-        //                 stringRedisTemplate.delete(lockKey);
-        //             } catch (Exception e) {
-        //                 log.warn("释放锁失败", e);
-        //             }
-        //         }
-        //     } else {
-        //         log.info("其他节点正在初始化消费者组，跳过初始化");
-        //     }
-        // } catch (Exception e) {
-        //     log.error("初始化消费者组异常", e);
-        // }
-        // log.info("线程池状态: shutdown={}, terminated={}",
-        //         secKillThreadPool.isShutdown(),
-        //         secKillThreadPool.isTerminated());
-        // secKillThreadPool.submit(new VoucherOrderHandler());
-    // }
+        boolean exists = IntStream.range(0, groupsInfo.groupCount())
+                .mapToObj(groupsInfo::get)
+                .anyMatch(g -> groupName.equals(g.groupName()));
+
+        if (exists) {
+            log.info("消费者组已存在，跳过创建: {} / {}", streamKey, groupName);
+            return;
+        }
+
+        try {
+            stringRedisTemplate.opsForStream().createGroup(
+                    streamKey,
+                    ReadOffset.from("0"),
+                    groupName
+            );
+            log.info("成功创建消费者组: {} / {}", streamKey, groupName);
+        } catch (RedisCommandExecutionException e) {
+            if (isGroupAlreadyExistsException(e)) {
+                log.info("消费者组并发创建，已存在: {} / {}", streamKey, groupName);
+            } else {
+                log.error("创建消费者组失败: {} / {}", streamKey, groupName, e);
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * 判断是否为“组已存在”的异常
+     */
+    private boolean isGroupAlreadyExistsException(RedisCommandExecutionException e) {
+        String msg = e.getMessage();
+        return msg != null && (
+                msg.contains("BUSYGROUP") ||
+                        msg.toLowerCase().contains("consumer group name already exists")
+        );
+    }
+
+    /**
+     * 安全释放分布式锁（使用 Lua 脚本校验 value）
+     */
+    private void releaseLockSafely(String lockKey, String lockValue) {
+        try {
+            String luaScript = """
+                if redis.call('get', KEYS[1]) == ARGV[1] then
+                    return redis.call('del', KEYS[1])
+                else
+                    return 0
+                end""";
+
+            Long released = stringRedisTemplate.execute(
+                    new DefaultRedisScript<>(luaScript, Long.class),
+                    Collections.singletonList(lockKey),
+                    lockValue
+            );
+
+            if (released != null && released == 1L) {
+                log.debug("成功释放分布式锁: {}", lockKey);
+            } else {
+                log.debug("锁已过期或被其他实例持有，无需释放: {}", lockKey);
+            }
+        } catch (Exception e) {
+            log.warn("释放分布式锁失败: {}", lockKey, e);
+        }
+    }
+
+    private void logThreadPoolStatus() {
+        log.info("线程池状态: shutdown={}, terminated={}",
+                secKillThreadPool.isShutdown(),
+                secKillThreadPool.isTerminated());
+    }
+//     @PostConstruct
+//     public void init() {
+//         log.info("异步秒杀线程池启动");
+//         log.info("开始初始化Redis Stream消费者组...");
+//         String streamKey = "stream.orders";
+//         String groupName = "g1";
+//         String lockKey = streamKey + ":group_init_lock";
+//
+//         try {
+//             // 1. 尝试获取分布式锁（设置30秒过期）
+//             Boolean lockAcquired = stringRedisTemplate.opsForValue()
+//                     .setIfAbsent(lockKey, "locked", 30, TimeUnit.SECONDS);
+//
+//             if (Boolean.TRUE.equals(lockAcquired)) {
+//                 try {
+//                     // 2. 检查流是否存在
+//                     if (Boolean.FALSE.equals(stringRedisTemplate.hasKey(streamKey))) {
+//                         // 创建空流（等效于MKSTREAM）
+//                         Map<String, String> dummyData = Map.of("__init__", "dummy_value");
+//                         stringRedisTemplate.opsForStream().add(streamKey, dummyData);
+//                         log.info("创建新Stream: {}", streamKey);
+//                     }
+//
+//                     // 3. 尝试创建消费者组
+//                     try {
+//                         stringRedisTemplate.opsForStream().createGroup(
+//                                 streamKey,
+//                                 ReadOffset.from("0"),
+//                                 groupName
+//
+//                         );
+//                         log.info("成功创建消费者组: {}/{}", streamKey, groupName);
+//                     } catch (Exception e) {
+//                         //有些异常是灰色的，不能直接log出来，需要拿原因来判断
+//                         Throwable rootCause = e.getCause(); // 获取最底层原因
+//                         if (rootCause instanceof RedisBusyException) {
+//                             log.info("业务提示：{}", rootCause.getMessage()); // 友好提示
+//                         } else {
+//                             log.error("系统错误", e); // 真实错误仍报警
+//                         }
+//                     }
+//                 } finally {
+//                     // 4. 释放锁
+//                     try {
+//                         //加一个检查其他线程是否持有锁
+//                         stringRedisTemplate.delete(lockKey);
+//                     } catch (Exception e) {
+//                         log.warn("释放锁失败", e);
+//                     }
+//                 }
+//             } else {
+//                 log.info("其他节点正在初始化消费者组，跳过初始化");
+//             }
+//         } catch (Exception e) {
+//             log.error("初始化消费者组异常", e);
+//         }
+//         log.info("线程池状态: shutdown={}, terminated={}",
+//                 secKillThreadPool.isShutdown(),
+//                 secKillThreadPool.isTerminated());
+//         secKillThreadPool.submit(new VoucherOrderHandler());
+//     }
 
     private class VoucherOrderHandler implements Runnable {
         private final String queueName="stream.orders";

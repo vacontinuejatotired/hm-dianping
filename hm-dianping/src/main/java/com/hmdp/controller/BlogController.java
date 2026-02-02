@@ -81,9 +81,10 @@ public class BlogController {
     public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
         // 根据用户查询
         return blogService.queryHotById(current);
-//        Page<Blog> page = blogService.query()
+//        Page<Blog> page = new Page<>(current, SystemConstants.MAX_PAGE_SIZE);
+//        page = blogService.query()
 //                .orderByDesc("liked")
-//                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
+//                .page(page);
 //        // 获取当前页数据
 //        List<Blog> records = page.getRecords();
 //        // 查询用户
@@ -111,3 +112,4 @@ public class BlogController {
     return blogService.queryBlogOfFollow(max,offset);
     }
 }
+

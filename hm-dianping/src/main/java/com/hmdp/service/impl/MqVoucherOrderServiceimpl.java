@@ -43,34 +43,34 @@ public class MqVoucherOrderServiceimpl extends ServiceImpl<VoucherOrderMapper, V
     private static final int MAX_RETRY = 3;
     @Resource
     private AmqpAdmin amqpAdmin;
-    @PostConstruct
-    public void init(){
-        createExchange();
-        createQueue(RabbitMqConstants.QUEUE_NAME,);
-        createQueue(RabbitMqConstants.DEAD_QUEUE_NAME);
-    }
+//    @PostConstruct
+//    public void init(){
+//        createExchange();
+//        createQueue(RabbitMqConstants.QUEUE_NAME,);
+//        createQueue(RabbitMqConstants.DEAD_QUEUE_NAME);
+//    }
 
-    private void createExchange(String ExchangeName){
-        Exchange exchange = ExchangeBuilder.topicExchange(ExchangeName).durable(true).build();
-        amqpAdmin.declareExchange(exchange);
-        log.info("交换机声明成功{}",ExchangeName);
-    }
+//    private void createExchange(String ExchangeName){
+//        Exchange exchange = ExchangeBuilder.topicExchange(ExchangeName).durable(true).build();
+//        amqpAdmin.declareExchange(exchange);
+//        log.info("交换机声明成功{}",ExchangeName);
+//    }
 
-    private void createQueue(String queueName, String routingKey, String exchange,  String exchangeName, String queueType) {
-        QueueInformation exist= amqpAdmin.getQueueInfo(queueName) ;
-        if(exist==null) {
-            log.info("不存在队列{},即将添加",queueName);
-            Map<String,Object>argsMap = new HashMap<>();
-            Binding binding = new Binding();
-            Queue queue =new Queue(queueName, true, false, false);
-            queue.shouldDeclare();
-            amqpAdmin.declareQueue(queue);
-            log.info("队列{}创建",queueName);
-        }
-        else{
-            log.info("{}已存在,详细信息{}",queueName,exist);
-        }
-    }
+//    private void createQueue(String queueName, String routingKey, String exchange,  String exchangeName, String queueType) {
+//        QueueInformation exist= amqpAdmin.getQueueInfo(queueName) ;
+//        if(exist==null) {
+//            log.info("不存在队列{},即将添加",queueName);
+//            Map<String,Object>argsMap = new HashMap<>();
+//            Binding binding = new Binding();
+//            Queue queue =new Queue(queueName, true, false, false);
+//            queue.shouldDeclare();
+//            amqpAdmin.declareQueue(queue);
+//            log.info("队列{}创建",queueName);
+//        }
+//        else{
+//            log.info("{}已存在,详细信息{}",queueName,exist);
+//        }
+//    }
 
     @RabbitListener(queues = "voucher_order")
     public void voucherOrderHandler(Message message, Channel channel, @Header("orderId") Long orderId, @Header("voucherId")Long voucherId, @Header(AmqpHeaders.DELIVERY_TAG)Long deliveryTag,@Header("retryCounts") int retryCounts) throws IOException {

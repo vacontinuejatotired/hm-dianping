@@ -9,6 +9,7 @@ import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
+import com.hmdp.interceptor.AutoUpdateTime;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
@@ -53,6 +54,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
 //    @Transactional(rollbackFor = SQLException.class)
+//    @AutoUpdateTime(printLog = true)
     public Result login(LoginFormDTO loginForm, HttpSession session) {
         String code = loginForm.getCode();
         String phone = loginForm.getPhone();
@@ -88,6 +90,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                         setFieldValueEditor((filedName, filedValue) -> filedValue.toString()));
         stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USER_KEY + token, stringObjectMap);
         stringRedisTemplate.expire(RedisConstants.LOGIN_USER_KEY + token, 30, TimeUnit.MINUTES);
+        //在这里生成刷新token
+        String refreshToken = UUID.randomUUID().toString();
+        stringRedisTemplate.opsForValue().set(RedisConstants.REFRESH_USER_KEY + user.getId(), refreshToken);
+        stringRedisTemplate.expire(RedisConstants.REFRESH_USER_KEY+user.getId(), 2, TimeUnit.HOURS);
         return Result.ok(token);
     }
 

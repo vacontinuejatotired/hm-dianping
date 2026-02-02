@@ -1,8 +1,7 @@
  package com.hmdp.config;
 
  import com.hmdp.utils.RabbitMqConstants;
- import org.springframework.amqp.core.Queue;
- import org.springframework.amqp.core.QueueBuilder;
+ import org.springframework.amqp.core.*;
  import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
  import org.springframework.amqp.rabbit.core.RabbitTemplate;
  import org.springframework.context.annotation.Bean;
@@ -41,7 +40,26 @@
          template.setMandatory(true);  // 如有返回，可观察
          return template;
      }
+     @Bean
+     public Exchange AlternatEexchange(){
+         Map<String, Object> arguments = new HashMap<>();
+         return ExchangeBuilder.fanoutExchange(RabbitMqConstants.ALTERNATE_EXCHANGE_NAME).durable(true)
+                 .build();
+     }
 
+     @Bean
+     public Exchange deadExchange(){
+         Map<String, Object> arguments = new HashMap<>();
+         return ExchangeBuilder.topicExchange(RabbitMqConstants.DEAD_EXCHANGE_NAME).durable(true)
+                 .build();
+     }
+
+     @Bean
+     public Exchange TopicExchange() {
+         Map<String, Object> args = new HashMap<>();
+         args.put("alternate-exchange", RabbitMqConstants.ALTERNATE_EXCHANGE_NAME);
+         return new TopicExchange(RabbitMqConstants.NORMAL_EXCHANGE_NAME,true,false,args);
+     }
      /**
       * 声明一个仲裁对列
       * @return
@@ -53,7 +71,36 @@
          arguments.put("x-dead-letter-routing-key",RabbitMqConstants.DEAD_ROUTING_KEY);
          arguments.put("x-message-ttl", 60000);
          arguments.put("x-max-length", 10000);
-         arguments.put("x-queue-type","quorum");
+         arguments.put("x-queue-type","classic");
          return QueueBuilder.durable(RabbitMqConstants.QUEUE_NAME).withArguments(arguments).build();
+     }
+
+     @Bean
+     public Queue deadQueue() {
+         Map<String, Object> arguments = new HashMap<>();
+         arguments.put("x-message-ttl", 60000);
+         arguments.put("x-max-length", 10000);
+         arguments.put("x-queue-type","classic");
+         arguments.put("x-overflow", "drop-head");
+         // 可选：消息最大重试投递次数（防毒消息无限循环）
+
+         arguments.put("x-delivery-limit", 20);
+         return QueueBuilder.durable(RabbitMqConstants.DEAD_QUEUE_NAME).build();
+     }
+
+     @Bean
+     public Binding voucherOrderBinding() {
+         return BindingBuilder
+                 .bind(voucherOrderQueue())
+                 .to(TopicExchange()).
+                 with(RabbitMqConstants.NORMAL_ROUTING_KEY).noargs();
+     }
+
+     @Bean
+     public Binding deadQueueBinding() {
+         return BindingBuilder
+                 .bind(deadQueue())
+                 .to(deadExchange())
+                 .with(RabbitMqConstants.DEAD_ROUTING_KEY).noargs();
      }
  }

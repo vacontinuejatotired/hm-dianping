@@ -166,6 +166,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             log.info("Empty follows");
             return;
         }
+        log.info("开始批量插入");
         stringRedisTemplate.executePipelined((RedisCallback<Object>) connect ->{
             Long followUserId ;
             double now = System.currentTimeMillis();
