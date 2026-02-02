@@ -8,4 +8,5 @@ public class RabbitMqConstants {
     public static final String NORMAL_ROUTING_KEY = "order.normal";
     public static final String DEAD_ROUTING_KEY = "order.dead";
     public static final String ALTERNATE_EXCHANGE_NAME = "alternate_voucher_order_exchange" ;
+    public static final String NORMAL_ORDER_PREFIX = "normal.order";
 }
