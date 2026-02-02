@@ -18,7 +18,7 @@ public class RedisIdWorker {
     public RedisIdWorker(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
-    public long nexId(String keyPrefix){
+    public long nextId(String keyPrefix){
         LocalDateTime now = LocalDateTime.now();
         long timeStamp=now.toEpochSecond(ZoneOffset.UTC)-BEGIN_TIME;
         String date= now.format(DateTimeFormatter.ofPattern("yyyy:MM:dd"));
