@@ -1,5 +1,9 @@
  package com.hmdp.config;
 
+ import com.fasterxml.jackson.databind.ObjectMapper;
+ import com.fasterxml.jackson.databind.SerializationFeature;
+ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+ import com.hmdp.entity.VoucherOrder;
  import com.hmdp.utils.RabbitMqConstants;
  import org.springframework.amqp.core.*;
  import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
@@ -7,11 +11,14 @@
  import org.springframework.amqp.rabbit.connection.ConnectionFactory;
  import org.springframework.amqp.rabbit.core.RabbitTemplate;
  import org.springframework.amqp.rabbit.listener.RabbitListenerContainerFactory;
+ import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
  import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+ import org.springframework.amqp.support.converter.MessageConverter;
  import org.springframework.context.annotation.Bean;
  import org.springframework.context.annotation.Configuration;
  import org.springframework.context.annotation.Primary;
 
+ import java.text.SimpleDateFormat;
  import java.util.HashMap;
  import java.util.Map;
 
@@ -35,12 +42,42 @@
 //         factory.setPublisherReturns(true);
 //         return factory;
 //     }
+     @Bean
+     public MessageConverter messageConverter() {// 1. 创建 ObjectMapper
+         ObjectMapper objectMapper = new ObjectMapper();
 
+         // 2. 注册 JavaTimeModule（关键！）
+         objectMapper.registerModule(new JavaTimeModule());
+
+         // 3. 禁用日期时间戳格式，使用可读格式
+         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+         // 4. 配置日期格式
+         objectMapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
+
+         // 5. 创建 JSON 消息转换器
+         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter(objectMapper);
+
+         // 6. 设置类型映射（重要！）
+         DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
+
+         // 设置消息头中的类型信息
+         typeMapper.setTypePrecedence(DefaultJackson2JavaTypeMapper.TypePrecedence.TYPE_ID);
+
+         // 创建类型映射
+         Map<String, Class<?>> idClassMapping = new HashMap<>();
+         idClassMapping.put("voucherOrder", VoucherOrder.class);
+         typeMapper.setIdClassMapping(idClassMapping);
+
+         converter.setJavaTypeMapper(typeMapper);
+         return converter;
+     }
      // 如果使用 RabbitTemplate，也可自定义
 //     @Bean("myRabbitTemplate")
      @Bean
      public RabbitTemplate rabbitTemplate(CachingConnectionFactory cf) {
          RabbitTemplate template = new RabbitTemplate(cf);
+         template.setMessageConverter(messageConverter());
          template.setMandatory(true);  // 如有返回，可观察
          return template;
      }
@@ -54,7 +91,7 @@
      public RabbitListenerContainerFactory<?> rabbitListenerContainerFactory(ConnectionFactory connectionFactory) {
          SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
          factory.setConnectionFactory(connectionFactory);
-         factory.setMessageConverter(new Jackson2JsonMessageConverter());
+         factory.setMessageConverter(messageConverter());
          factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
          return factory;
      }
