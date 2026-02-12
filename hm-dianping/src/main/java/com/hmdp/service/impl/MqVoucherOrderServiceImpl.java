@@ -20,7 +20,6 @@ import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.amqp.core.MessagePropertiesBuilder;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -149,7 +148,8 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
     public void deadQueueHandler(VoucherOrder voucherOrder,Channel channel,@Header(AmqpHeaders.DELIVERY_TAG)Long deliverTag ) throws IOException {
         boolean success = false;
         log.info("订单id：{}进入死信队列",voucherOrder.getId());
-
+        channel.basicAck(deliverTag, false);
+        log.info("order:{} has been down",voucherOrder.getId());
     }
 
     /**
@@ -163,7 +163,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
     }
     @Override
     public Result querySeckillVoucher(Long voucherId) {
-        Long userId = UserHolder.getUser().getId();
+        Long userId = UserHolder.getUserId();
         Long orderId = redisIdWorker.nextId("order");
         Long result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(), voucherId.toString(), userId.toString(),orderId.toString());
         int r = result.intValue();
@@ -195,7 +195,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result saveOrder(Long voucherId) {
-        Long userId  = UserHolder.getUser().getId();
+        Long userId  = UserHolder.getUserId();
         //查询库存，然后扣减，lua脚本实现
         Long orderId = redisIdWorker.nextId("order");
         List<String> args = new ArrayList<>();

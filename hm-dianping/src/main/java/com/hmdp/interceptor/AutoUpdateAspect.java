@@ -1,11 +1,9 @@
 package com.hmdp.interceptor;
 
 
-import com.hmdp.entity.User;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.ibatis.javassist.bytecode.SignatureAttribute;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
@@ -52,11 +50,11 @@ public class AutoUpdateAspect {
 
     @AfterReturning("pointcut()")
     public void autoUpdateTime(JoinPoint joinPoint) {
-        if(UserHolder.getUser() == null) {
+        if(UserHolder.getUserId() == null) {
             log.info("用户信息未传递");
             return;
         }
-        Long userId  = UserHolder.getUser().getId();
+        Long userId  = UserHolder.getUserId();
 
         MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
        AutoUpdateTime annotation  = methodSignature.getMethod().getAnnotation(AutoUpdateTime.class);

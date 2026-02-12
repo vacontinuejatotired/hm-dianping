@@ -36,7 +36,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     private IUserService userService;
     @Override
     public Result queryNotFollow(Long id) {
-    Long userId=UserHolder.getUser().getId();
+    Long userId=UserHolder.getUserId();
     Integer count=query().eq("user_id",userId).eq("follow_user_id",id).count();
         return Result.ok(count>0);
     }
@@ -46,19 +46,19 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
 //传过来的id是被关注的人的id
         if (isfollow) {
             Follow follow = new Follow();
-            follow.setUserId(UserHolder.getUser().getId());
+            follow.setUserId(UserHolder.getUserId());
             follow.setFollowUserId(id);
             boolean isSuccess = save(follow);
             if (isSuccess) {
-                String key="follows:"+UserHolder.getUser().getId();
+                String key="follows:"+UserHolder.getUserId();
                 stringRedisTemplate.opsForSet().add(key,id.toString());
             }
         }
         else {
-            Long userId = UserHolder.getUser().getId();
+            Long userId = UserHolder.getUserId();
             boolean isRemove = remove(new QueryWrapper<Follow>().eq("user_id", userId).eq("follow_user_id", id));
             if (isRemove) {
-                String key="follows:"+UserHolder.getUser().getId();
+                String key="follows:"+UserHolder.getUserId();
                 stringRedisTemplate.opsForSet().remove(key,id.toString());
             }
         }
@@ -69,7 +69,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     @Override
     public Result queryCommonFollow(Long id) {
         String FollowKey="follows:"+id;
-        String UserKey="follows:"+UserHolder.getUser().getId().toString();
+        String UserKey="follows:"+UserHolder.getUserId().toString();
         Set<String> intersect = stringRedisTemplate.opsForSet().intersect(FollowKey, UserKey);
         if(intersect==null|| intersect.isEmpty()){
             return Result.ok(Collections.emptyList());

@@ -9,14 +9,9 @@ import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
-import com.hmdp.interceptor.AutoUpdateTime;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RegexUtils;
-import com.hmdp.utils.SystemConstants;
-import com.hmdp.utils.UserHolder;
-import io.lettuce.core.BitFieldArgs;
+import com.hmdp.utils.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -29,10 +24,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -49,6 +41,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private JwtUtil jwtUtil;
     private static final List<String> TOKEN_LIST = new ArrayList<>();
     private static final List<String> PHONE_LIST = new ArrayList<>();
 
@@ -66,7 +60,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             log.info("传入验证码{}，实际验证码{}", loginForm.getCode(), tempCode);
             return Result.fail("验证码错误");
         }
-        String token = UUID.randomUUID().toString();
         User user = new User();
         user = query().eq("phone", phone).one();
         if (user == null) {
@@ -83,26 +76,37 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             }
             log.info("phone={}用户已创建", phone);
         }
+        String token = jwtUtil.generateToken(user.getId());
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
+        //用户数据存redis查吗？
+        //TODO旧token需要检查
         Map<String, Object> stringObjectMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
                 CopyOptions.create().setIgnoreNullValue(true).
                         setFieldValueEditor((filedName, filedValue) -> filedValue.toString()));
         stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USER_KEY + token, stringObjectMap);
         stringRedisTemplate.expire(RedisConstants.LOGIN_USER_KEY + token, 30, TimeUnit.MINUTES);
         //在这里生成刷新token
-        String refreshToken = UUID.randomUUID().toString();
-        stringRedisTemplate.opsForValue().set(RedisConstants.REFRESH_USER_KEY + user.getId(), refreshToken);
-        stringRedisTemplate.expire(RedisConstants.REFRESH_USER_KEY+user.getId(), 2, TimeUnit.HOURS);
-        return Result.ok(token);
+        String refreshKey = RedisConstants.REFRESH_USER_KEY + user.getId();
+        String refreshToken;
+        if (stringRedisTemplate.hasKey(refreshKey)) {
+            stringRedisTemplate.delete(refreshKey);
+        }
+        refreshToken = UUID.randomUUID().toString().replace("-", "");
+        stringRedisTemplate.opsForValue().set(refreshKey, refreshToken, 7, TimeUnit.DAYS);
+        Map<String, String> map = new HashMap<>();
+        map.put("token", token);
+        map.put("refreshToken", refreshToken);
+        log.info("map={}", map);
+        return Result.ok(map);
     }
 
     @Override
     public Result sign() {
-        UserDTO user = UserHolder.getUser();
+        Long user = UserHolder.getUserId();
         LocalDateTime now = LocalDateTime.now();
         String YearMonth=now.format(DateTimeFormatter.ofPattern("yyyy-MM"));
-        String key= YearMonth+user.getId()+RedisConstants.USER_SIGN_KEY;
+        String key= YearMonth+user+RedisConstants.USER_SIGN_KEY;
         int dayOfMonth=now.getDayOfMonth();
         stringRedisTemplate.opsForValue().setBit(key,dayOfMonth-1,true);
         return Result.ok();
@@ -110,10 +114,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public Result getSignCount() {
-        UserDTO user = UserHolder.getUser();
+        Long user = UserHolder.getUserId();
         LocalDateTime now = LocalDateTime.now();
         String YearMonth=now.format(DateTimeFormatter.ofPattern("yyyy-MM"));
-        String key= YearMonth+user.getId()+RedisConstants.USER_SIGN_KEY;
+        String key= YearMonth+user+RedisConstants.USER_SIGN_KEY;
         int dayOfMonth=now.getDayOfMonth();
         List<Long> bitField = stringRedisTemplate.opsForValue().bitField(key,
                 BitFieldSubCommands.create()
@@ -200,54 +204,197 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
         return token;
     }
-    public void testGenerate200Tokens() {
-        // 生成200个token并自动导出CSV
+    public void testGenerateTokens(int num,String filename) {
         generateAndExportTokens(
-                200,      // 生成200个token
+                num,      // 生成200个token
                 true,     // 导出CSV
-                "test_tokens.txt"  // 指定文件名
+                filename  // 指定文件名
         );
     }
     public void generateAndExportTokens(int count, boolean exportToCsv, String csvFilePath) {
+        System.out.println("============= 开始生成Token =============");
+        System.out.println("目标生成数量: " + count);
+        System.out.println("导出CSV: " + exportToCsv);
+
         // 清空之前的记录
         TOKEN_LIST.clear();
         PHONE_LIST.clear();
+        System.out.println("已清空之前的记录");
+
+        // 统计变量
+        int successCount = 0;
+        int redisSuccessCount = 0;
+        int tokenSuccessCount = 0;
+        int failedCount = 0;
+        List<String> failedPhones = new ArrayList<>();
 
         // 生成测试token
         for (int i = 1; i <= count; i++) {
-            String phone = generateTestPhone(i);
-            String code = "123456"; // 统一验证码
+            String phone = null;
+            String token = null;
 
-            // 存入验证码到Redis
-            stringRedisTemplate.opsForValue().set(
-                    RedisConstants.LOGIN_CODE_KEY + phone,
-                    code,
-                    30, TimeUnit.MINUTES);
+            try {
+                phone = generateTestPhone(i);
+                System.out.printf("\n[%d/%d] 处理手机号: %s%n", i, count, phone);
 
-            // 生成用户token
-            String token = generateUserToken(phone);
-            TOKEN_LIST.add(token);
-            PHONE_LIST.add(phone);
+                String code = "123456"; // 统一验证码
 
-            System.out.printf("生成用户 [%d/%d] phone: %s, token: %s%n",
-                    i, count, phone, token);
+                // 存入验证码到Redis
+                try {
+                    stringRedisTemplate.opsForValue().set(
+                            RedisConstants.LOGIN_CODE_KEY + phone,
+                            code,
+                            300, TimeUnit.MINUTES);
+                    redisSuccessCount++;
+                    System.out.println("  ✓ Redis验证码设置成功");
+                } catch (Exception e) {
+                    System.err.println("  ✗ Redis验证码设置失败: " + e.getMessage());
+                    // 继续尝试生成token，不立即失败
+                }
+
+                // 生成用户token
+                try {
+                    token = generateUserToken(phone,300);
+                    if (token == null || token.trim().isEmpty()) {
+                        throw new RuntimeException("生成的token为空");
+                    }
+
+                    TOKEN_LIST.add(token);
+                    PHONE_LIST.add(phone);
+                    tokenSuccessCount++;
+                    successCount++;
+
+                    System.out.println("  ✓ Token生成成功: " + token.substring(0, Math.min(20, token.length())) + "...");
+
+                } catch (Exception e) {
+                    failedCount++;
+                    failedPhones.add(phone);
+                    System.err.println("  ✗ Token生成失败: " + e.getMessage());
+                    // 继续处理下一个，不中断循环
+                }
+
+            } catch (Exception e) {
+                // 外层异常处理
+                failedCount++;
+                String failedPhone = (phone != null) ? phone : "未知手机号";
+                failedPhones.add(failedPhone);
+                System.err.printf("  ✗ 处理第 %d 个时发生外层异常: %s%n", i, e.getMessage());
+            }
+
+            // 每50个输出一次进度
+            if (i % 50 == 0) {
+                System.out.printf("\n[进度报告] 已处理 %d/%d, 成功: %d, 失败: %d%n",
+                        i, count, successCount, failedCount);
+            }
         }
 
-        System.out.println("\n共生成 " + TOKEN_LIST.size() + " 个有效token");
+        System.out.println("\n============= 生成完成 =============");
+        System.out.println("目标数量: " + count);
+        System.out.println("成功生成: " + successCount);
+        System.out.println("失败数量: " + failedCount);
+        System.out.println("Redis操作成功: " + redisSuccessCount);
+        System.out.println("Token生成成功: " + tokenSuccessCount);
+        System.out.println("TOKEN_LIST大小: " + TOKEN_LIST.size());
+        System.out.println("PHONE_LIST大小: " + PHONE_LIST.size());
+
+        if (!failedPhones.isEmpty()) {
+            System.out.println("\n失败手机号列表:");
+            for (int i = 0; i < Math.min(10, failedPhones.size()); i++) {
+                System.out.println("  " + failedPhones.get(i));
+            }
+            if (failedPhones.size() > 10) {
+                System.out.println("  ... 还有 " + (failedPhones.size() - 10) + " 个失败记录");
+            }
+        }
+
+        // 检查是否有重复
+        try {
+            Set<String> uniquePhones = new HashSet<>(PHONE_LIST);
+            if (uniquePhones.size() != PHONE_LIST.size()) {
+                System.out.println("\n⚠️ 警告: 发现重复手机号!");
+                System.out.println("  列表数量: " + PHONE_LIST.size());
+                System.out.println("  唯一数量: " + uniquePhones.size());
+                System.out.println("  重复数量: " + (PHONE_LIST.size() - uniquePhones.size()));
+            }
+
+            Set<String> uniqueTokens = new HashSet<>(TOKEN_LIST);
+            if (uniqueTokens.size() != TOKEN_LIST.size()) {
+                System.out.println("\n⚠️ 警告: 发现重复Token!");
+                System.out.println("  列表数量: " + TOKEN_LIST.size());
+                System.out.println("  唯一数量: " + uniqueTokens.size());
+            }
+        } catch (Exception e) {
+            System.err.println("检查重复时出错: " + e.getMessage());
+        }
 
         // 导出CSV
         if (exportToCsv) {
             String filePath = (csvFilePath == null || csvFilePath.isEmpty())
-                    ? "tokens.txt" : csvFilePath;
+                    ? "tokens_" + System.currentTimeMillis() + ".txt" : csvFilePath;
+
+            System.out.println("\n尝试导出到CSV文件: " + filePath);
+
             try {
                 exportTokensToCsv(filePath);
-                System.out.println("Token已导出到: " + new File(filePath).getAbsolutePath());
+                File file = new File(filePath);
+                System.out.println("✓ Token已成功导出到: " + file.getAbsolutePath());
+                System.out.println("  文件大小: " + file.length() + " 字节");
+
+                // 验证文件内容
+                if (file.exists() && file.length() > 0) {
+                    System.out.println("  导出验证: 成功");
+                } else {
+                    System.out.println("  ⚠️ 导出验证: 文件可能为空或创建失败");
+                }
+
             } catch (IOException e) {
-                System.err.println("导出CSV失败: " + e.getMessage());
+                System.err.println("✗ 导出CSV失败: " + e.getMessage());
+                e.printStackTrace();
+            } catch (Exception e) {
+                System.err.println("✗ 导出过程中发生意外错误: " + e.getMessage());
+                e.printStackTrace();
             }
+        } else {
+            System.out.println("\n跳过CSV导出");
         }
+
+        System.out.println("\n============= 任务结束 =============");
     }
 
+    private String generateUserToken(String phone,int expireTime) {
+        //先查用户是否存在
+
+        String token = java.util.UUID.randomUUID().toString();
+        User user = new User();
+        user = query().eq("phone", phone).one();
+        //不存在就生成用户并且插入
+        if (user == null) {
+            user = new User()
+                    .setPhone(phone)
+                    .setNickName(SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomString(6))
+                    .setCreateTime(LocalDateTime.now())
+                    .setUpdateTime(LocalDateTime.now());
+            save(user);
+        }
+        //把token塞进redis
+        UserDTO userDTO = new UserDTO();
+        BeanUtil.copyProperties(user, userDTO);
+
+        Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
+                CopyOptions.create()
+                        .setIgnoreNullValue(true)
+                        .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+
+        stringRedisTemplate.opsForHash().putAll(
+                RedisConstants.LOGIN_USER_KEY + token,
+                userMap);
+
+        stringRedisTemplate.expire(
+                RedisConstants.LOGIN_USER_KEY + token,
+                expireTime, TimeUnit.MINUTES);
+
+        return token;
+    }
     /**
      * 导出token到CSV文件
      * @param filePath 文件路径
@@ -263,6 +410,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                         i + 1,
                         PHONE_LIST.get(i),
                         TOKEN_LIST.get(i));
+                log.info("导入{}条",i+1);
             }
         }
     }

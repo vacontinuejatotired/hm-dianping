@@ -1,16 +1,13 @@
 package com.hmdp.utils;
 
-import com.hmdp.dto.UserDTO;
-import com.hmdp.entity.User;
-
 public class UserHolder {
-    private static final ThreadLocal<UserDTO> tl = new ThreadLocal<>();
+    private static final ThreadLocal<Long> tl = new ThreadLocal<>();
 
-    public static void saveUser(UserDTO user){
-        tl.set(user);
+    public static void saveUserId(Long userId){
+        tl.set(userId);
     }
 
-    public static UserDTO getUser(){
+    public static Long getUserId(){
         return tl.get();
     }
 

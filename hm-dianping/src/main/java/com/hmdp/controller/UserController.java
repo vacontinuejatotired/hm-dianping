@@ -66,7 +66,7 @@ public class UserController {
     @GetMapping("/me")
     @AutoUpdateTime
     public Result me(){
-        return Result.ok(UserHolder.getUser());
+        return Result.ok(UserHolder.getUserId());
     }
 
     @GetMapping("/{id}")

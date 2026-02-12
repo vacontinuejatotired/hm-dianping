@@ -34,3 +34,7 @@ build/
 ##application
 /src/main/resources/application-dev.yaml
 /src/test/
+#密钥文件
+*.pem
+*.key
+private*
