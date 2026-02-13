@@ -4,6 +4,7 @@ public class RedisConstants {
     public static final String LOGIN_CODE_KEY = "login:code:";
     public static final Long LOGIN_CODE_TTL = 2L;
     public static final String LOGIN_USER_KEY = "login:token:";
+    public static final String LOGIN_USERINFO_MAP = "login:userinfo:";
     public static final String REFRESH_USER_KEY = "refresh:user:";
     public static final Long LOGIN_USER_TTL = 36000L;
 

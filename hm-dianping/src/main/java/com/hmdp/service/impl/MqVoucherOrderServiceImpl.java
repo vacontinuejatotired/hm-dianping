@@ -5,21 +5,22 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
-
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RabbitMqConstants;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
-import org.springframework.amqp.core.*;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.aop.framework.AopContext;
-import org.springframework.amqp.core.MessagePropertiesBuilder;
-
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,7 +28,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.rabbitmq.client.Channel;
+
 import javax.annotation.Resource;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -37,7 +38,7 @@ import java.util.*;
 @Service
 @Slf4j
 @Primary
-public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,VoucherOrder> implements IVoucherOrderService {
+public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -145,27 +146,29 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
     }
 
     @RabbitListener(queues = RabbitMqConstants.DEAD_QUEUE_NAME)
-    public void deadQueueHandler(VoucherOrder voucherOrder,Channel channel,@Header(AmqpHeaders.DELIVERY_TAG)Long deliverTag ) throws IOException {
+    public void deadQueueHandler(VoucherOrder voucherOrder, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) Long deliverTag) throws IOException {
         boolean success = false;
-        log.info("订单id：{}进入死信队列",voucherOrder.getId());
+        log.info("订单id：{}进入死信队列", voucherOrder.getId());
         channel.basicAck(deliverTag, false);
-        log.info("order:{} has been down",voucherOrder.getId());
+        log.info("order:{} has been down", voucherOrder.getId());
     }
 
     /**
      * 设置lua脚本
      */
     private static final DefaultRedisScript<Long> REDIS_UNLOCK_SCRIPT;
+
     static {
         REDIS_UNLOCK_SCRIPT = new DefaultRedisScript<>();
         REDIS_UNLOCK_SCRIPT.setResultType(Long.class);
-        REDIS_UNLOCK_SCRIPT.setLocation(new ClassPathResource("Seckill.lua"));
+        REDIS_UNLOCK_SCRIPT.setLocation(new ClassPathResource("MqSeckill.lua"));
     }
+
     @Override
     public Result querySeckillVoucher(Long voucherId) {
         Long userId = UserHolder.getUserId();
         Long orderId = redisIdWorker.nextId("order");
-        Long result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(), voucherId.toString(), userId.toString(),orderId.toString());
+        Long result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(), voucherId.toString(), userId.toString(), orderId.toString());
         int r = result.intValue();
         //0代表才加入缓存，1代表库存不足，2代表重复下单
         //集群部署的redis，你这怎么查？
@@ -189,13 +192,13 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
             return;
         }
         //发送到消息队列处理扣减库存
-        rabbitTemplate.convertAndSend(RabbitMqConstants.NORMAL_EXCHANGE_NAME,RabbitMqConstants.NORMAL_ROUTING_KEY,voucherOrder);
+        rabbitTemplate.convertAndSend(RabbitMqConstants.NORMAL_EXCHANGE_NAME, RabbitMqConstants.NORMAL_ROUTING_KEY, voucherOrder);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result saveOrder(Long voucherId) {
-        Long userId  = UserHolder.getUserId();
+        Long userId = UserHolder.getUserId();
         //查询库存，然后扣减，lua脚本实现
         Long orderId = redisIdWorker.nextId("order");
         List<String> args = new ArrayList<>();
@@ -203,10 +206,10 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
         args.add(String.valueOf(userId));
         args.add(String.valueOf(orderId));
         try {
-            int result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(),args.toArray()).intValue();
+            int result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(), args.toArray()).intValue();
             //0->扣减 1->不足 2->已下单
             if (result != 0) {
-                return Result.fail(result == 1 ?"库存不足":"重复下单");
+                return Result.fail(result == 1 ? "库存不足" : "重复下单");
             }
         } catch (Exception e) {
             log.info("执行Lua脚本失败");
@@ -227,8 +230,8 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper,Vo
             //扣减库存
             rabbitTemplate.
                     convertAndSend(RabbitMqConstants.NORMAL_EXCHANGE_NAME
-                            ,RabbitMqConstants.NORMAL_ROUTING_KEY
-                            ,voucherOrder);
+                            , RabbitMqConstants.NORMAL_ROUTING_KEY
+                            , voucherOrder);
         } catch (AmqpException e) {
             log.info("异步更新库存失败");
             throw new RuntimeException(e);

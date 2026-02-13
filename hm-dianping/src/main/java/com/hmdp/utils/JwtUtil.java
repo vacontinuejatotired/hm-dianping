@@ -1,23 +1,26 @@
 package com.hmdp.utils;
 
 import io.jsonwebtoken.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-
+@Slf4j
 public class JwtUtil {
 
     private static PrivateKey PRIVATE_KEY;
@@ -100,13 +103,13 @@ public class JwtUtil {
         }
     }
 
-    public String generateToken(Long  userId) {
+    public String generateToken(Long  userId, Long timeExpired, TemporalUnit temporalUnit) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
 
         // 使用当前时间 + 30 分钟作为过期时间（Unix 时间戳，秒级）
         Instant now = Instant.now();
-        Instant exp = now.plus(30, ChronoUnit.MINUTES);
+        Instant exp = now.plus(timeExpired, temporalUnit);
         return Jwts.builder()
                 .claims(claims)
                 .expiration(Date.from(exp))
@@ -116,12 +119,15 @@ public class JwtUtil {
                 .compact();
     }
 
-    public Claims ValiateAndGetClaimFromToken(String token) throws JwtException {
+    public Claims valiateAndGetClaimFromToken(String token) throws JwtException {
+
         if (PUBLIC_KEY == null) {
-            System.out.println("Public key is null");
-            throw new JwtException("Public key is null");
+            log.error("Public key is null - cannot verify JWT signature");
+            throw new IllegalStateException("Public key not initialized");
         }
+
         if (token == null || token.trim().isEmpty()) {
+            log.warn("Token is null or empty");
             throw new IllegalArgumentException("Token cannot be null or empty");
         }
 
@@ -133,17 +139,32 @@ public class JwtUtil {
                     .getPayload();
 
         } catch (ExpiredJwtException e) {
-            // 过期但签名有效，返回 claims（供刷新使用）
-
-            return e.getClaims();
+            log.info("Token has expired, userId from claims: {}", e.getClaims().get("userId"));
+            throw e;  // 必须抛出，让拦截器捕获并处理刷新逻辑
 
         } catch (PrematureJwtException e) {
-            // token 未到生效时间（nbf）
-            throw new JwtException("Token used before not-before time", e);
+            log.warn("Token used before not-before time: {}", e.getMessage());
+            throw e;
+
+        } catch (UnsupportedJwtException e) {
+            log.warn("Unsupported JWT format: {}", e.getMessage());
+            throw new JwtException("Unsupported JWT format", e);
+
+        } catch (MalformedJwtException e) {
+            log.warn("Malformed JWT: {}", e.getMessage());
+            throw new JwtException("Malformed JWT", e);
+
+        } catch (SignatureException e) {
+            log.warn("Invalid JWT signature: {}", e.getMessage());
+            throw new JwtException("Invalid JWT signature", e);
 
         } catch (JwtException e) {
-            // 签名无效、格式错误等
-            throw new JwtException("JWT validation failed: " + e.getMessage(), e);
+            log.warn("JWT validation failed: {}", e.getMessage(), e);
+            throw e;  // 其他 JWT 异常直接抛出
+
+        } catch (Exception e) {
+            log.error("Unexpected error during JWT validation", e);
+            throw new JwtException("Unexpected JWT validation error", e);
         }
     }
 }

@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -76,16 +77,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             }
             log.info("phone={}用户已创建", phone);
         }
-        String token = jwtUtil.generateToken(user.getId());
+        String token = jwtUtil.generateToken(user.getId(),30L, ChronoUnit.MINUTES);
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
         //用户数据存redis查吗？
         //TODO旧token需要检查
-        Map<String, Object> stringObjectMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
-                CopyOptions.create().setIgnoreNullValue(true).
-                        setFieldValueEditor((filedName, filedValue) -> filedValue.toString()));
-        stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USER_KEY + token, stringObjectMap);
-        stringRedisTemplate.expire(RedisConstants.LOGIN_USER_KEY + token, 30, TimeUnit.MINUTES);
+        if (!stringRedisTemplate.hasKey(RedisConstants.LOGIN_USERINFO_MAP + userDTO.getId())) {
+            Map<String, Object> stringObjectMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
+                    CopyOptions.create().setIgnoreNullValue(true).
+                            setFieldValueEditor((filedName, filedValue) -> filedValue.toString()));
+            stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USERINFO_MAP + user.getId(), stringObjectMap);
+            stringRedisTemplate.expire(RedisConstants.LOGIN_USERINFO_MAP + user.getId(), 30, TimeUnit.MINUTES);
+        }
+        //删除旧token
+        if(stringRedisTemplate.hasKey(RedisConstants.LOGIN_USER_KEY + user.getId())) {
+            stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + user.getId());
+            log.info("delete key {}", RedisConstants.LOGIN_USER_KEY + user.getId());
+        }
+        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + user.getId(), token, 30, TimeUnit.MINUTES);
         //在这里生成刷新token
         String refreshKey = RedisConstants.REFRESH_USER_KEY + user.getId();
         String refreshToken;

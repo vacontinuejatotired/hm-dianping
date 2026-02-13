@@ -4,10 +4,10 @@ package com.hmdp.interceptor;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
+import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.aspectj.lang.JoinPoint;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
