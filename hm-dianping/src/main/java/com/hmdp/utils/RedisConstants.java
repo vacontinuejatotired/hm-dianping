@@ -7,7 +7,7 @@ public class RedisConstants {
     public static final String LOGIN_USERINFO_MAP = "login:userinfo:";
     public static final String REFRESH_USER_KEY = "refresh:user:";
     public static final Long LOGIN_USER_TTL = 36000L;
-
+    public static final String TOKEN_VERSION_KEY = "token:refresh:version:";
     public static final Long CACHE_NULL_TTL = 2L;
 
     public static final Long CACHE_SHOP_TTL = 30L;

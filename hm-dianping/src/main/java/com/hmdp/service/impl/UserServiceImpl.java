@@ -13,8 +13,10 @@ import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -47,6 +49,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     private static final List<String> TOKEN_LIST = new ArrayList<>();
     private static final List<String> PHONE_LIST = new ArrayList<>();
 
+    public static final DefaultRedisScript<String> REDIS_LOGIN_SET_TOKEN ;
+    static {
+        REDIS_LOGIN_SET_TOKEN = new DefaultRedisScript<>();
+        REDIS_LOGIN_SET_TOKEN.setResultType(String.class);
+        REDIS_LOGIN_SET_TOKEN.setLocation(new ClassPathResource("LoginSetToken.lua"));
+    }
     @Override
 //    @Transactional(rollbackFor = SQLException.class)
 //    @AutoUpdateTime(printLog = true)
@@ -89,7 +97,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USERINFO_MAP + user.getId(), stringObjectMap);
             stringRedisTemplate.expire(RedisConstants.LOGIN_USERINFO_MAP + user.getId(), 30, TimeUnit.MINUTES);
         }
+        LocalDateTime version = LocalDateTime.now();
+        String versionKey =RedisConstants.TOKEN_VERSION_KEY + user.getId();
+
         //删除旧token
+        //强制只能存在一个token
         if(stringRedisTemplate.hasKey(RedisConstants.LOGIN_USER_KEY + user.getId())) {
             stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + user.getId());
             log.info("delete key {}", RedisConstants.LOGIN_USER_KEY + user.getId());
