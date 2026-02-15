@@ -19,8 +19,8 @@ local storedToken = redis.call('GET', tokenKey)
 if storedToken ~= oldToken then
     return '{"code":0,"message":"token mismatch"}'
 end
-redis.call('DEL', tokenKey)
 redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
+
 --redis.call('Del',versionKey)
 --redis.call('SET',versionKey.newVersion,'EX',versionExpireSeconds)
 --暂时不考虑在正常刷新token里修改version

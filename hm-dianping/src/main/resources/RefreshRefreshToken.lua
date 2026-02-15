@@ -17,7 +17,7 @@
 -- ARGV[8]: newVersion (新生成的版本号，例如当前时间戳)
 local RefreshTokenKey = KEYS[1]
 local tokenKey = KEYS[2]
-local versionKey =KEYS[3]
+local validVersionKey =KEYS[3]
 local oldRefreshToken = ARGV[1]
 local newRefreshToken = ARGV[2]
 local refreshTokenExpireSeconds = tonumber(ARGV[3])
@@ -26,19 +26,20 @@ local tokenExpireSeconds = tonumber(ARGV[5])
 local version = tonumber(ARGV[6])
 local versionExpireSeconds = tonumber(ARGV[7])
 local newVersion = tonumber(ARGV[8])
-local orginVersion =redis.call('get',versionKey)
+local orginVersion =redis.call('get', validVersionKey)
 if not orginVersion then
     local result = {
         code = 0,
-        message = 'token exists before login'
+        message = 'orginVersion is null'
     }
     return cjson.encode(result)
 end
 --比登录时间还早的token不可使用
 if tonumber(orginVersion) > version then
-    local result
-    result.code = 0
-    result.message= 'token exists before login'
+    local result = {        -- 直接初始化为 table
+        code = 0,
+        message = 'token exists before login'
+    }
     return cjson.encode(result)
 end
 local exists = redis.call('EXISTS', RefreshTokenKey)
@@ -55,7 +56,7 @@ redis.call('SET', RefreshTokenKey, newRefreshToken, 'EX', refreshTokenExpireSeco
 --redis.call('DEL',tokenKey)
 redis.call('SET',tokenKey,newToken,'EX',tokenExpireSeconds)
 --redis.call('del',versionKey)
-redis.call('SET',versionKey,newVersion,'EX',versionExpireSeconds)
+redis.call('SET', validVersionKey,newVersion,'EX',versionExpireSeconds)
 local result = {
     code = 1,
     message = "update all token and version success",

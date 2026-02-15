@@ -105,8 +105,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
         String refreshToken = UUID.randomUUID().toString().replace("-", "");
         String tokenKey = (RedisConstants.LOGIN_USER_KEY + user.getId());
-        String refreshTokenKey = (RedisConstants.REFRESH_USER_KEY + user.getId());
-        String versionKey =RedisConstants.TOKEN_VERSION_KEY + user.getId();
+        String refreshTokenKey = (RedisConstants.LOGIN_REFRESH_USER_KEY + user.getId());
+        //登录请求拿最新的version
+        //通过nextVersion方法可拿到最新的Version
+        //在redis中设置最新Version可以让之前的token统一失效
+        String versionKey =RedisConstants.LOGIN_VALID_VERSION_KEY + user.getId();
         List<String> argv = new ArrayList<>();
         argv.add(token);
         argv.add(refreshToken);
