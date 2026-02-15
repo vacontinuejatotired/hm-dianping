@@ -18,7 +18,28 @@
 - 额外引入**版本号机制**，限制有效 Refresh Token 与任意过期 Access Token 的非法组合使用。
 - 刷新流程使用 **Redis + Lua 脚本** 原子执行：检查 key 存在 → 值比对 → 删除旧令牌 → 写入新令牌，避免并发条件下的 Token 覆盖。
 - 用户信息缓存于 Redis Hash，显著降低数据库认证压力。
-
+附带login方法流程
+flowchart TD
+    A[登录请求] --> B[校验手机号]
+    B -->|失败| Z[返回错误]
+    
+    B -->|成功| C[校验验证码]
+    C -->|失败| Z
+    
+    C -->|成功| D{用户是否存在？}
+    D -->|否| E[创建新用户]
+    E --> F
+    D -->|是| F[生成新version\n（redisIdWorker.nextVersion）]
+    
+    F --> G[生成accessToken\n（含userId+version）]
+    G --> H[生成refreshToken\n（UUID随机）]
+    
+    H --> I[执行Lua脚本\n原子化写入Redis]
+    I --> J{写入成功？}
+    J -->|否| Z
+    
+    J -->|是| K[返回token+refreshToken]
+    K --> Z
 ### 2. 高并发异步库存扣减
 
 - Redis 预减库存 + Lua 脚本原子完成检查、扣减、重复下单校验（单脚本内处理）。
