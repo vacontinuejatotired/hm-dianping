@@ -10,6 +10,7 @@ import com.hmdp.entity.User;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.JwtUtil;
 import com.hmdp.utils.RedisConstants;
+import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -33,13 +34,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     private StringRedisTemplate stringRedisTemplate;
     private IUserService userService;
-    public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate, IUserService userService) {
+    public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate, IUserService userService,RedisIdWorker redisIdWorker) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.userService = userService;
+        this.redisIdWorker = redisIdWorker;
     }
     private static final DefaultRedisScript<String > REDIS_REFRESH_TOKEN_SCRIPT;
     private static final DefaultRedisScript<String> REDIS_REFRESH_REFRESH_TOKEN_SCRIPT;
-
+    private RedisIdWorker redisIdWorker;
     static {
         REDIS_REFRESH_TOKEN_SCRIPT = new DefaultRedisScript<>();
         REDIS_REFRESH_TOKEN_SCRIPT.setResultType(String.class);
@@ -147,14 +149,19 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 if (timeToExpire < tenMinutes && timeToExpire > 0) {
                     // 3. 只有在token快要过期时才刷新
                     log.info("token has expired");
-                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), 30L, ChronoUnit.MINUTES,System.currentTimeMillis());
+                    Long version = claims.get("version", Long.class);
+                    //正常刷新的token不修改version
+                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), 30L, ChronoUnit.MINUTES,version);
                     String tokenKey = RedisConstants.LOGIN_USER_KEY + UserHolder.getUserId();
+                    String versionKey = RedisConstants.TOKEN_VERSION_KEY + UserHolder.getUserId();
                     List<String> args = new ArrayList<>();
                     args.add(token);
                     args.add(newToken);
                     args.add("1800");
+//                    args.add(version.toString());
                     List<String> keys = new ArrayList<>();
                     keys.add(tokenKey);
+//                    keys.add(versionKey);
                     String execute = stringRedisTemplate.execute(REDIS_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
                     LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
                     if(luaResult.getCode() == 0){
@@ -329,6 +336,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
         UserHolder.remove();
+        log.info("用户信息已清除");
     }
     /**
      * 刷新过期token以及redis中的refreshToken
@@ -361,9 +369,9 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String refreshToken = request.getHeader("Refresh-Token");
         String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
         String versionKey = RedisConstants.TOKEN_VERSION_KEY + userId;
-
+        Long newVersion = redisIdWorker.nextVersion();
         //发来的请求没refreshToken那不就是假的？
-        token = JWT_UTIL.generateToken(userId, 30L, ChronoUnit.MINUTES,System.currentTimeMillis());
+        token = JWT_UTIL.generateToken(userId, 30L, ChronoUnit.MINUTES,newVersion);
         if (refreshToken == null) {
             log.info("RefreshToken is null,failed to refresh token");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -377,6 +385,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(30)));
         args.add(version.toString());
         args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
+        args.add(newVersion.toString());
         //refreshToken设置为7天的过期时间
         // 判断是否存在 refresh token
         List<String> keys = new ArrayList<>();

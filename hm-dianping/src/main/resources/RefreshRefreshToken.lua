@@ -3,14 +3,18 @@
 --- Created by Ntwitm.
 --- DateTime: 2026/2/13 23:16
 ---
--- KEYS[1]: RefreshToken = "login:token:" .. userId
+-- KEYS[1]: refreshKey = "refresh:user:" .. userId
+-- KEYS[2]: tokenKey = "login:token:" .. userId
+-- KEYS[3]: versionKey = "token:version:" .. userId
 
--- ARGV[1]: oldRefreshToken (请求携带的 RefreshToken)
+-- ARGV[1]: oldRefreshToken (请求携带的旧 RefreshToken)
 -- ARGV[2]: newRefreshToken (新生成的 RefreshToken)
--- ARGV[3]: expireSeconds (新 RefreshToken 的过期秒数，例如 30*60 = 1800)
--- ARGV[4]: newToken (新生成的token)
---ARGV[5]: tokenExpireSeconds 外部生成token的指定过期时间
-
+-- ARGV[3]: refreshTokenExpireSeconds (新 RefreshToken 的过期秒数，例如 7天 = 604800)
+-- ARGV[4]: newToken (新生成的 access token)
+-- ARGV[5]: tokenExpireSeconds (新 token 的过期秒数，例如 30分钟 = 1800)
+-- ARGV[6]: version (从过期 JWT 中解析出的旧版本号)
+-- ARGV[7]: versionExpireSeconds (版本号的过期秒数，与 refreshToken 保持一致)
+-- ARGV[8]: newVersion (新生成的版本号，例如当前时间戳)
 local RefreshTokenKey = KEYS[1]
 local tokenKey = KEYS[2]
 local versionKey =KEYS[3]
@@ -21,13 +25,13 @@ local newToken =ARGV[4]
 local tokenExpireSeconds = tonumber(ARGV[5])
 local version = tonumber(ARGV[6])
 local versionExpireSeconds = tonumber(ARGV[7])
-
+local newVersion = tonumber(ARGV[8])
 local orginVersion =redis.call('get',versionKey)
-if ~orginVersion then
-    local result ={
-    code = 0,
-    message = '该token版本号不存在',
-}
+if not orginVersion then
+    local result = {
+        code = 0,
+        message = 'token exists before login'
+    }
     return cjson.encode(result)
 end
 --比登录时间还早的token不可使用
@@ -45,19 +49,20 @@ local storedToken = redis.call('GET', RefreshTokenKey)
 if storedToken ~= oldRefreshToken then
     return '{"code":0,"message":"RefreshToken mismatch"}'
 end
-redis.call('DEL', RefreshTokenKey)
+--redis.call('DEL', RefreshTokenKey)
+--删除操作增加网络开销，可简化
 redis.call('SET', RefreshTokenKey, newRefreshToken, 'EX', refreshTokenExpireSeconds)
-redis.call('DEL',tokenKey)
+--redis.call('DEL',tokenKey)
 redis.call('SET',tokenKey,newToken,'EX',tokenExpireSeconds)
-redis.call('del',versionKey)
-redis.call('SET',versionKey,version,'EX',versionExpireSeconds)
+--redis.call('del',versionKey)
+redis.call('SET',versionKey,newVersion,'EX',versionExpireSeconds)
 local result = {
     code = 1,
     message = "update all token and version success",
     data = {
         newToken = newToken,
         newRefreshToken = newRefreshToken,
-        newVersion = tostring(version)
+        newVersion = tostring(newVersion)
     }
 }
 return cjson.encode(result)

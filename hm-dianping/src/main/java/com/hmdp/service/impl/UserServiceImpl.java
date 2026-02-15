@@ -27,7 +27,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -47,6 +46,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private RedisIdWorker redisIdWorker;
     @Resource
     private JwtUtil jwtUtil;
     private static final List<String> TOKEN_LIST = new ArrayList<>();
@@ -88,7 +89,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             }
             log.info("phone={}用户已创建", phone);
         }
-        Long version = System.currentTimeMillis();
+        Long version = redisIdWorker.nextVersion(user.getId());
         String token = jwtUtil.generateToken(user.getId(),30L, ChronoUnit.MINUTES,version);
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
@@ -119,7 +120,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         keys.add(refreshTokenKey);
         keys.add(versionKey);
         try {
-            String execute = stringRedisTemplate.execute(REDIS_LOGIN_SET_TOKEN, keys, argv);
+            String execute = stringRedisTemplate.execute(REDIS_LOGIN_SET_TOKEN, keys, argv.toArray());
             LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
             if(luaResult.getCode()!=1){
                 log.info("login failed");
