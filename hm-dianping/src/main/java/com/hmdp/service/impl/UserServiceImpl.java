@@ -90,7 +90,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             log.info("phone={}用户已创建", phone);
         }
         Long version = redisIdWorker.nextVersion(user.getId());
-        String token = jwtUtil.generateToken(user.getId(),30L, ChronoUnit.MINUTES,version);
+        String token = jwtUtil.generateToken(user.getId(),RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,version);
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
         //用户数据存redis查吗？
@@ -114,7 +114,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         argv.add(token);
         argv.add(refreshToken);
         argv.add(version.toString());
-        argv.add(RedisConstants.LOGIN_TOKEN_TTL_SECONDS.toString());
+        argv.add(String.valueOf(60*RedisConstants.LOGIN_JWT_TTL_MINUTES));
         argv.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
         //version过期时间设置与refresh过期时间相同，同步失效
         argv.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());

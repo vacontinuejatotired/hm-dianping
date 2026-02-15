@@ -151,13 +151,13 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                     log.info("token has expired");
                     Long version = claims.get("version", Long.class);
                     //正常刷新的token不修改version
-                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), 30L, ChronoUnit.MINUTES,version);
+                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,version);
                     String tokenKey = RedisConstants.LOGIN_USER_KEY + UserHolder.getUserId();
                     String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + UserHolder.getUserId();
                     List<String> args = new ArrayList<>();
                     args.add(token);
                     args.add(newToken);
-                    args.add("1800");
+                    args.add(String.valueOf((60*RedisConstants.LOGIN_JWT_TTL_MINUTES)));
 //                    args.add(version.toString());
                     List<String> keys = new ArrayList<>();
                     keys.add(tokenKey);
@@ -191,6 +191,10 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             response = handleExpiredToken(request, response, e);
             if(response.getStatus() == HttpServletResponse.SC_UNAUTHORIZED){
                 log.info("token update failed");
+                return false;
+            }
+            if(response.getStatus() == HttpServletResponse.SC_NOT_ACCEPTABLE){
+                log.error("token can not update");
                 return false;
             }
 
@@ -371,7 +375,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
         Long newVersion = redisIdWorker.nextVersion();
         //发来的请求没refreshToken那不就是假的？
-        token = JWT_UTIL.generateToken(userId, 30L, ChronoUnit.MINUTES,newVersion);
+        token = JWT_UTIL.generateToken(userId, RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,newVersion);
         if (refreshToken == null) {
             log.info("RefreshToken is null,failed to refresh token");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -382,7 +386,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         args.add(newRefreshToken);
         args.add(String.valueOf(TimeUnit.DAYS.toSeconds(7)));
         args.add(token);
-        args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(30)));
+        args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(RedisConstants.LOGIN_JWT_TTL_MINUTES)));
         args.add(versionFromToken.toString());
         args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
         args.add(newVersion.toString());
@@ -401,6 +405,13 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         }
         if(luaResult.getCode() == 1){
             log.info("update expired token ,{}",luaResult.getMessage());
+        }
+        if(luaResult.getCode() == 2){
+            log.error("{}",luaResult.getMessage());
+            response.setStatus(HttpServletResponse.SC_NOT_ACCEPTABLE);
+            response.setHeader("authorization", request.getHeader("authorization"));
+            response.setHeader("Refresh-Token", request.getHeader("refresh-token"));
+            return response;
         }
         response.setHeader("authorization",token);
         response.setHeader("Refresh-Token",newRefreshToken);

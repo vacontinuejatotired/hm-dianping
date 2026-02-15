@@ -37,7 +37,7 @@ end
 --比登录时间还早的token不可使用
 if tonumber(orginVersion) > version then
     local result = {        -- 直接初始化为 table
-        code = 0,
+        code = 2,
         message = 'token exists before login'
     }
     return cjson.encode(result)
