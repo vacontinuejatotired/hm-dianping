@@ -46,42 +46,43 @@ Refresh拦截器拦截流程
 ```mermaid
 flowchart TD
     A[收到请求] --> B{URI公开？}
-    B -->|是| Z[放行]
+    B -->|是| Z[放行] --> END
     
     B -->|否| C[取Authorization头]
     C --> D{Token存在？}
-    D -->|否| E[401] --> Z
+    D -->|否| E[401 Unauthorized] --> END
     
     D -->|是| F[解析JWT]
     F --> G{解析结果}
     
-    G -->|过期异常| H[走过期处理]
-    H --> I{刷新成功？}
-    I -->|否| E
-    I -->|是| Z
+    G -->|过期异常| H[调用handleExpiredToken]
+    H --> I{处理结果}
+    I -->|401| E
+    I -->|406| J[406 Not Acceptable] --> END
+    I -->|成功| Z
     
     G -->|其他异常| E
     
-    G -->|成功| J[验证Claims并加载用户]
-    J --> K{验证成功？}
-    K -->|否| E
+    G -->|成功| K[验证Claims并加载用户]
+    K --> L{验证成功？}
+    L -->|否| E
     
-    K -->|是| L{剩余时间 < 10分钟？}
-    L -->|否| M[正常处理] --> Z
+    L -->|是| M{剩余时间 < 10分钟？}
+    M -->|否| N[正常处理] --> Z
     
-    L -->|是| N[生成新accessToken<br>（version不变）]
-    N --> O[执行Lua脚本更新Redis]
-    O --> P{更新成功？}
-    P -->|否| E
-    P -->|是| Q[设置新token到响应头]
-    Q --> M
+    M -->|是| O[生成新accessToken<br>（version不变）]
+    O --> P[执行Lua脚本更新Redis]
+    P --> Q{更新成功？}
+    Q -->|否| E
+    Q -->|是| R[设置新token到响应头]
+    R --> N
 ```
 刷新过期token流程
 ```mermaid
 flowchart TD
     A[收到过期异常] --> B[从过期token提取<br>userId + version]
     B --> C{提取成功？}
-    C -->|否| D[401] --> Z
+    C -->|否| D[401 Unauthorized] --> END[结束]
     
     C -->|是| E[取Refresh-Token头]
     E --> F{RefreshToken存在？}
@@ -94,13 +95,13 @@ flowchart TD
     I --> J[执行Lua脚本<br>原子化校验+更新]
     J --> K{Lua返回码}
     
-    K -->|0| L[失败 → 401] --> Z
-    K -->|2| M[RefreshToken不匹配 → 406] --> Z
+    K -->|0| L[失败 → 401 Unauthorized] --> END
+    K -->|2| M[RefreshToken不匹配<br>→ 406 Not Acceptable] --> END
     
     K -->|1| N[成功]
     N --> O[设置新token到响应头]
     O --> P[设置新refreshToken到响应头]
-    P --> Z
+    P --> END
 ```
 ### 2. 高并发异步库存扣减
 
@@ -128,7 +129,7 @@ flowchart TD
 
 ## 关键文件位置
 
-- 登录刷新 Lua 脚本：`src/main/resources/redis/refreshToken.lua`（或类似路径，根据实际文件调整）
+- 登录刷新 Lua 脚本：`src/main/resources/refreshToken.lua`
 - 库存扣减 Lua 脚本：`src/main/resources/MqSeckill.lua`
 - 拦截器与令牌逻辑：`com.hmdp.interceptor` / `com.hmdp.service.impl` 等包
 
