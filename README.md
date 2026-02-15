@@ -19,6 +19,7 @@
 - 刷新流程使用 **Redis + Lua 脚本** 原子执行：检查 key 存在 → 值比对 → 删除旧令牌 → 写入新令牌，避免并发条件下的 Token 覆盖。
 - 用户信息缓存于 Redis Hash，显著降低数据库认证压力。
 附带login方法流程
+```mermaid
 flowchart TD
     A[登录请求] --> B[校验手机号]
     B -->|失败| Z[返回错误]
@@ -29,17 +30,78 @@ flowchart TD
     C -->|成功| D{用户是否存在？}
     D -->|否| E[创建新用户]
     E --> F
-    D -->|是| F[生成新version\n（redisIdWorker.nextVersion）]
+    D -->|是| F[生成新version<br>（redisIdWorker.nextVersion）]
     
-    F --> G[生成accessToken\n（含userId+version）]
-    G --> H[生成refreshToken\n（UUID随机）]
+    F --> G[生成accessToken<br>（含userId+version）]
+    G --> H[生成refreshToken<br>（UUID随机）]
     
-    H --> I[执行Lua脚本\n原子化写入Redis]
+    H --> I[执行Lua脚本<br>原子化写入Redis]
     I --> J{写入成功？}
     J -->|否| Z
     
     J -->|是| K[返回token+refreshToken]
     K --> Z
+```
+Refresh拦截器拦截流程
+```mermaid
+flowchart TD
+    A[收到请求] --> B{URI公开？}
+    B -->|是| Z[放行]
+    
+    B -->|否| C[取Authorization头]
+    C --> D{Token存在？}
+    D -->|否| E[401] --> Z
+    
+    D -->|是| F[解析JWT]
+    F --> G{解析结果}
+    
+    G -->|过期异常| H[走过期处理]
+    H --> I{刷新成功？}
+    I -->|否| E
+    I -->|是| Z
+    
+    G -->|其他异常| E
+    
+    G -->|成功| J[验证Claims并加载用户]
+    J --> K{验证成功？}
+    K -->|否| E
+    
+    K -->|是| L{剩余时间 < 10分钟？}
+    L -->|否| M[正常处理] --> Z
+    
+    L -->|是| N[生成新accessToken<br>（version不变）]
+    N --> O[执行Lua脚本更新Redis]
+    O --> P{更新成功？}
+    P -->|否| E
+    P -->|是| Q[设置新token到响应头]
+    Q --> M
+```
+刷新过期token流程
+```mermaid
+flowchart TD
+    A[收到过期异常] --> B[从过期token提取<br>userId + version]
+    B --> C{提取成功？}
+    C -->|否| D[401] --> Z
+    
+    C -->|是| E[取Refresh-Token头]
+    E --> F{RefreshToken存在？}
+    F -->|否| D
+    
+    F -->|是| G[生成新version<br>（redisIdWorker.nextVersion）]
+    G --> H[生成新accessToken<br>（含新version）]
+    H --> I[生成新refreshToken<br>（UUID随机）]
+    
+    I --> J[执行Lua脚本<br>原子化校验+更新]
+    J --> K{Lua返回码}
+    
+    K -->|0| L[失败 → 401] --> Z
+    K -->|2| M[RefreshToken不匹配 → 406] --> Z
+    
+    K -->|1| N[成功]
+    N --> O[设置新token到响应头]
+    O --> P[设置新refreshToken到响应头]
+    P --> Z
+```
 ### 2. 高并发异步库存扣减
 
 - Redis 预减库存 + Lua 脚本原子完成检查、扣减、重复下单校验（单脚本内处理）。
