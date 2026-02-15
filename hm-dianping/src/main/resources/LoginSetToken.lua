@@ -25,4 +25,4 @@ redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
 redis.call('SET', refreshKey, refreshToken, 'EX', refreshExpireSeconds)
 redis.call('SET', versionKey, version, 'EX', versionExpireSeconds)
 
-return '{"code":1,"message":"success"}'
+return '{"code":1,"message":"update token,refreshToken,version success"}'

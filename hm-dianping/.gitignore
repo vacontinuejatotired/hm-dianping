@@ -30,7 +30,7 @@ build/
 !**/src/test/**/build/
 
 ### VS Code ###
-.vscode/
+.vscode/settings.json
 ##application
 /src/main/resources/application-dev.yaml
 /src/test/
@@ -38,3 +38,5 @@ build/
 *.pem
 *.key
 private*
+/hs_err_pid39372.log
+*.log

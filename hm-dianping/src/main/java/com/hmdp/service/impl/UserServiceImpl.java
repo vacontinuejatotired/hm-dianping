@@ -4,8 +4,10 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
+import com.hmdp.dto.LuaResult;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
@@ -25,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -85,7 +88,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             }
             log.info("phone={}用户已创建", phone);
         }
-        String token = jwtUtil.generateToken(user.getId(),30L, ChronoUnit.MINUTES);
+        Long version = System.currentTimeMillis();
+        String token = jwtUtil.generateToken(user.getId(),30L, ChronoUnit.MINUTES,version);
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
         //用户数据存redis查吗？
@@ -97,25 +101,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USERINFO_MAP + user.getId(), stringObjectMap);
             stringRedisTemplate.expire(RedisConstants.LOGIN_USERINFO_MAP + user.getId(), 30, TimeUnit.MINUTES);
         }
-        LocalDateTime version = LocalDateTime.now();
-        String versionKey =RedisConstants.TOKEN_VERSION_KEY + user.getId();
 
-        //删除旧token
-        //强制只能存在一个token
-        if(stringRedisTemplate.hasKey(RedisConstants.LOGIN_USER_KEY + user.getId())) {
-            stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + user.getId());
-            log.info("delete key {}", RedisConstants.LOGIN_USER_KEY + user.getId());
+        String refreshToken = UUID.randomUUID().toString().replace("-", "");
+        String tokenKey = (RedisConstants.LOGIN_USER_KEY + user.getId());
+        String refreshTokenKey = (RedisConstants.REFRESH_USER_KEY + user.getId());
+        String versionKey =RedisConstants.TOKEN_VERSION_KEY + user.getId();
+        List<String> argv = new ArrayList<>();
+        argv.add(token);
+        argv.add(refreshToken);
+        argv.add(version.toString());
+        argv.add(RedisConstants.LOGIN_TOKEN_TTL_SECONDS.toString());
+        argv.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
+        //version过期时间设置与refresh过期时间相同，同步失效
+        argv.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
+        List<String> keys = new ArrayList<>();
+        keys.add(tokenKey);
+        keys.add(refreshTokenKey);
+        keys.add(versionKey);
+        try {
+            String execute = stringRedisTemplate.execute(REDIS_LOGIN_SET_TOKEN, keys, argv);
+            LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
+            if(luaResult.getCode()!=1){
+                log.info("login failed");
+            }
+        } catch (Exception e) {
+            log.error("login failed", e);
+            return Result.fail("login failed");
         }
-        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + user.getId(), token, 30, TimeUnit.MINUTES);
-        //在这里生成刷新token
-        String refreshKey = RedisConstants.REFRESH_USER_KEY + user.getId();
-        String refreshToken;
-        if (stringRedisTemplate.hasKey(refreshKey)) {
-            stringRedisTemplate.delete(refreshKey);
-        }
-        refreshToken = UUID.randomUUID().toString().replace("-", "");
-        stringRedisTemplate.opsForValue().set(refreshKey, refreshToken, 7, TimeUnit.DAYS);
-        Map<String, String> map = new HashMap<>();
+        Map<String, String> map = new HashMap<>(3);
         map.put("token", token);
         map.put("refreshToken", refreshToken);
         log.info("map={}", map);

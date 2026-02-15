@@ -13,11 +13,30 @@
 
 local RefreshTokenKey = KEYS[1]
 local tokenKey = KEYS[2]
+local versionKey =KEYS[3]
 local oldRefreshToken = ARGV[1]
 local newRefreshToken = ARGV[2]
 local refreshTokenExpireSeconds = tonumber(ARGV[3])
 local newToken =ARGV[4]
-local tokenExpireSeconds = ARGV[5]
+local tokenExpireSeconds = tonumber(ARGV[5])
+local version = tonumber(ARGV[6])
+local versionExpireSeconds = tonumber(ARGV[7])
+
+local orginVersion =redis.call('get',versionKey)
+if ~orginVersion then
+    local result ={
+    code = 0,
+    message = '该token版本号不存在',
+}
+    return cjson.encode(result)
+end
+--比登录时间还早的token不可使用
+if tonumber(orginVersion) > version then
+    local result
+    result.code = 0
+    result.message= 'token exists before login'
+    return cjson.encode(result)
+end
 local exists = redis.call('EXISTS', RefreshTokenKey)
 if exists == 0 then
     return '{"code":0,"message":"RefreshToken key not found"}'
@@ -30,4 +49,15 @@ redis.call('DEL', RefreshTokenKey)
 redis.call('SET', RefreshTokenKey, newRefreshToken, 'EX', refreshTokenExpireSeconds)
 redis.call('DEL',tokenKey)
 redis.call('SET',tokenKey,newToken,'EX',tokenExpireSeconds)
-return '{"code":1,"message":"success","data":{"newToken":"' .. newToken .. '","newRefreshToken":"' .. newRefreshToken .. '"}}'
+redis.call('del',versionKey)
+redis.call('SET',versionKey,version,'EX',versionExpireSeconds)
+local result = {
+    code = 1,
+    message = "update all token and version success",
+    data = {
+        newToken = newToken,
+        newRefreshToken = newRefreshToken,
+        newVersion = tostring(version)
+    }
+}
+return cjson.encode(result)

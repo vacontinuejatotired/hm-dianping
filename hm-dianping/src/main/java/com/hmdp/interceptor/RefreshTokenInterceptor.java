@@ -147,7 +147,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 if (timeToExpire < tenMinutes && timeToExpire > 0) {
                     // 3. 只有在token快要过期时才刷新
                     log.info("token has expired");
-                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), 30L, ChronoUnit.MINUTES);
+                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), 30L, ChronoUnit.MINUTES,System.currentTimeMillis());
                     String tokenKey = RedisConstants.LOGIN_USER_KEY + UserHolder.getUserId();
                     List<String> args = new ArrayList<>();
                     args.add(token);
@@ -343,10 +343,12 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String token = request.getHeader("authorization");
         log.info("token  expired");
         //我恨你 Long userId = (Long) e.getClaims().get("userId")
-        Long userId;
+        Long userId,version;
         try {
             userId = Long.valueOf(String.valueOf(e.getClaims().get("userId").toString()));
             log.info("从过期 token 中提取 userId: {}", userId);
+            version = Long.valueOf(String.valueOf(e.getClaims().get("version").toString()));
+            log.info("从过期 token 中提取 version: {}", version);
         } catch (NumberFormatException ex) {
             log.warn("无法从过期 token 中解析 userId: {}", ex.getMessage());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -358,8 +360,10 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String tokenKey = RedisConstants.LOGIN_USER_KEY + userId;
         String refreshToken = request.getHeader("Refresh-Token");
         String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
+        String versionKey = RedisConstants.TOKEN_VERSION_KEY + userId;
+
         //发来的请求没refreshToken那不就是假的？
-        token = JWT_UTIL.generateToken(userId, 30L, ChronoUnit.MINUTES);
+        token = JWT_UTIL.generateToken(userId, 30L, ChronoUnit.MINUTES,System.currentTimeMillis());
         if (refreshToken == null) {
             log.info("RefreshToken is null,failed to refresh token");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -371,11 +375,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         args.add(String.valueOf(TimeUnit.DAYS.toSeconds(7)));
         args.add(token);
         args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(30)));
+        args.add(version.toString());
+        args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
         //refreshToken设置为7天的过期时间
         // 判断是否存在 refresh token
         List<String> keys = new ArrayList<>();
         keys.add(refreshKey);
         keys.add(tokenKey);
+        keys.add(versionKey);
         String execute = stringRedisTemplate.execute(REDIS_REFRESH_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
         LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
         if(luaResult.getCode() == 0){
@@ -384,7 +391,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             return response;
         }
         if(luaResult.getCode() == 1){
-            log.info("update expired token {}",luaResult.getMessage());
+            log.info("update expired token ,{}",luaResult.getMessage());
         }
         response.setHeader("authorization",token);
         response.setHeader("Refresh-Token",newRefreshToken);

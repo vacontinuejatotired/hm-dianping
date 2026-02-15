@@ -101,11 +101,16 @@ public class JwtUtil {
             throw new RuntimeException("Failed to load RSA private key from classpath", e);
         }
     }
+    public String generateToken(Long userId,Long timeExpired,TemporalUnit temporalUnit) {
+        return generateToken(userId,timeExpired,temporalUnit,null);
+    }
 
-    public String generateToken(Long  userId, Long timeExpired, TemporalUnit temporalUnit) {
-        Map<String, Object> claims = new HashMap<>();
+    public String generateToken(Long  userId, Long timeExpired, TemporalUnit temporalUnit,Long version) {
+        Map<String, Object> claims = new HashMap<>(4);
         claims.put("userId", userId);
-
+        if(version != null) {
+            claims.put("version", version);
+        }
         // 使用当前时间 + 30 分钟作为过期时间（Unix 时间戳，秒级）
         Instant now = Instant.now();
         Instant exp = now.plus(timeExpired, temporalUnit);
