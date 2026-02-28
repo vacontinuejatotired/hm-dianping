@@ -154,14 +154,18 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                     String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,version);
                     String tokenKey = RedisConstants.LOGIN_USER_KEY + UserHolder.getUserId();
                     String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + UserHolder.getUserId();
+                    String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + UserHolder.getUserId();
+                    String clientRefreshToken = request.getHeader("Refresh-Token");
                     List<String> args = new ArrayList<>();
                     args.add(token);
                     args.add(newToken);
                     args.add(String.valueOf((60*RedisConstants.LOGIN_JWT_TTL_MINUTES)));
-//                    args.add(version.toString());
+                    args.add(version.toString());
+                    args.add(clientRefreshToken);
                     List<String> keys = new ArrayList<>();
                     keys.add(tokenKey);
-//                    keys.add(versionKey);
+                    keys.add(versionKey);
+                    keys.add(refreshKey);
                     String execute = stringRedisTemplate.execute(REDIS_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
                     LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
                     if(luaResult.getCode() == 0){
