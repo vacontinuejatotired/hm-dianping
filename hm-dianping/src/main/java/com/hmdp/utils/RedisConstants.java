@@ -1,5 +1,7 @@
 package com.hmdp.utils;
 
+import com.esotericsoftware.minlog.Log;
+
 public class RedisConstants {
     public static final String LOGIN_CODE_KEY = "login:code:";
     public static final Long LOGIN_CODE_TTL = 2L;
@@ -12,6 +14,7 @@ public class RedisConstants {
     public static final Long CACHE_NULL_TTL = 2L;
     public static final Long LOGIN_TOKEN_TTL_SECONDS = 1800L;
     public static final Long LOGIN_REFRESHTOKEN_TTL_SECONDS = (7 * 24 * 60 * 60L);
+    public static final Long NEW_VERSION_TTL_SECONDS = (8*24*60*60L);
     //过期时间暂时设置为1分钟方便测试
     public static final Long LOGIN_JWT_TTL_MINUTES = 1L;
     public static final Long CACHE_SHOP_TTL = 30L;

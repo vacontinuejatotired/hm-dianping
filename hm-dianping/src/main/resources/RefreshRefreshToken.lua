@@ -18,6 +18,7 @@
 local RefreshTokenKey = KEYS[1]
 local tokenKey = KEYS[2]
 local validVersionKey =KEYS[3]
+local newVersionKey = KEYS[4]
 local oldRefreshToken = ARGV[1]
 local newRefreshToken = ARGV[2]
 local refreshTokenExpireSeconds = tonumber(ARGV[3])
@@ -26,6 +27,7 @@ local tokenExpireSeconds = tonumber(ARGV[5])
 local version = tonumber(ARGV[6])
 local versionExpireSeconds = tonumber(ARGV[7])
 local newVersion = tonumber(ARGV[8])
+local newVersionExpireSeconds = tonumber(ARGV[9])
 local orginVersion =redis.call('get', validVersionKey)
 if not orginVersion then
     local result = {
@@ -57,6 +59,7 @@ redis.call('SET', RefreshTokenKey, newRefreshToken, 'EX', refreshTokenExpireSeco
 redis.call('SET',tokenKey,newToken,'EX',tokenExpireSeconds)
 --redis.call('del',versionKey)
 redis.call('SET', validVersionKey,newVersion,'EX',versionExpireSeconds)
+redis.call('EXPIRE',newVersionKey,newVersionExpireSeconds)
 local result = {
     code = 1,
     message = "update all token and version success",
