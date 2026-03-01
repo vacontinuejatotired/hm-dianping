@@ -156,16 +156,22 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                     String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + UserHolder.getUserId();
                     String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + UserHolder.getUserId();
                     String clientRefreshToken = request.getHeader("Refresh-Token");
+                    String newVersionKey = RedisConstants.TOKEN_VERSION_KEY + UserHolder.getUserId();
+                    Long newVersionExpireTime = RedisConstants.NEW_VERSION_TTL_SECONDS;
+                    Long refreshTokenAndValidVersionExpireSeconds = RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS;
                     List<String> args = new ArrayList<>();
                     args.add(token);
                     args.add(newToken);
                     args.add(String.valueOf((60*RedisConstants.LOGIN_JWT_TTL_MINUTES)));
                     args.add(version.toString());
                     args.add(clientRefreshToken);
+                    args.add(newVersionExpireTime.toString());
+                    args.add(refreshTokenAndValidVersionExpireSeconds.toString());
                     List<String> keys = new ArrayList<>();
                     keys.add(tokenKey);
                     keys.add(versionKey);
                     keys.add(refreshKey);
+                    keys.add(newVersionKey);
                     String execute = stringRedisTemplate.execute(REDIS_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
                     LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
                     if(luaResult.getCode() == 0){
@@ -378,6 +384,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
         String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
         Long newVersion = redisIdWorker.nextVersion();
+        String newVersionKey = RedisConstants.TOKEN_VERSION_KEY + userId;
+        Long newVersionExpireSeconds = RedisConstants.NEW_VERSION_TTL_SECONDS;
         //发来的请求没refreshToken那不就是假的？
         token = JWT_UTIL.generateToken(userId, RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,newVersion);
         if (refreshToken == null) {
@@ -394,12 +402,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         args.add(versionFromToken.toString());
         args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
         args.add(newVersion.toString());
+        args.add(newVersionExpireSeconds.toString());
         //refreshToken设置为7天的过期时间
         // 判断是否存在 refresh token
         List<String> keys = new ArrayList<>();
         keys.add(refreshKey);
         keys.add(tokenKey);
         keys.add(versionKey);
+        keys.add(newVersionKey);
         String execute = stringRedisTemplate.execute(REDIS_REFRESH_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
         LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
         if(luaResult.getCode() == 0){

@@ -110,6 +110,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //通过nextVersion方法可拿到最新的Version
         //在redis中设置最新Version可以让之前的token统一失效
         String versionKey =RedisConstants.LOGIN_VALID_VERSION_KEY + user.getId();
+        String newVersionKey = RedisConstants.TOKEN_VERSION_KEY+ user.getId();
         List<String> argv = new ArrayList<>();
         argv.add(token);
         argv.add(refreshToken);
@@ -118,10 +119,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         argv.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
         //version过期时间设置与refresh过期时间相同，同步失效
         argv.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
+        argv.add(RedisConstants.NEW_VERSION_TTL_SECONDS.toString());
         List<String> keys = new ArrayList<>();
         keys.add(tokenKey);
         keys.add(refreshTokenKey);
         keys.add(versionKey);
+        keys.add(newVersionKey);
         try {
             String execute = stringRedisTemplate.execute(REDIS_LOGIN_SET_TOKEN, keys, argv.toArray());
             LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
