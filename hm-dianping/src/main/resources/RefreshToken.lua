@@ -11,13 +11,14 @@
 local tokenKey = KEYS[1]
 local versionKey = KEYS[2]
 local refreshKey = KEYS[3]
-
+local newVersionKey = KEYS[4]
 local oldToken = ARGV[1]
 local newToken = ARGV[2]
 local tokenExpireSeconds = tonumber(ARGV[3])
 local oldVersion = tonumber(ARGV[4])
 local clientRefreshToken = ARGV[5]
-
+local newVersionExpireSeconds=tonumber(ARGV[6])
+local refreshExpireSeconds = tonumber(ARGV[7])
 -- 1. 验证 refreshToken
 local storedRefresh = redis.call('GET', refreshKey)
 if storedRefresh == nil then
@@ -76,11 +77,13 @@ end
 
 -- 5. 更新 token
 redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
-
+redis.call('EXPIRE',newVersionKey,newVersionExpireSeconds)
+redis.call('EXPIRE', refreshKey, refreshExpireSeconds)
+redis.call('EXPIRE',validVersion,refreshExpireSeconds)
 -- 6. 返回成功
 local result = {
     code = 1,
-    message = "success",
+    message = "refresh deadline token success",
     data = newToken
 }
 return cjson.encode(result)

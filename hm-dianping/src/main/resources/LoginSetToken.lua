@@ -7,14 +7,14 @@
 local tokenKey = KEYS[1]
 local refreshKey = KEYS[2]
 local versionKey = KEYS[3]
-
+local newVersionKey = KEYS[4]
 local newToken = ARGV[1]
 local refreshToken = ARGV[2]
 local version = tonumber(ARGV[3])
 local tokenExpireSeconds = tonumber(ARGV[4])
 local refreshExpireSeconds = tonumber(ARGV[5])
 local versionExpireSeconds = tonumber(ARGV[6])
-
+local newVersionExpireSeconds = tonumber(ARGV[7])
 -- 直接删除旧的（单设备登录，直接踢下线）
 redis.call('DEL', tokenKey)
 redis.call('DEL', refreshKey)
@@ -24,5 +24,9 @@ redis.call('DEL', versionKey)
 redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
 redis.call('SET', refreshKey, refreshToken, 'EX', refreshExpireSeconds)
 redis.call('SET', versionKey, version, 'EX', versionExpireSeconds)
-
-return '{"code":1,"message":"update token,refreshToken,version success"}'
+redis.call('expire',newVersionKey,newVersionExpireSeconds)
+local result ={
+    code = 1,
+    message ='update token,refreshToken,version success'
+}
+return cjson.encode(result)
