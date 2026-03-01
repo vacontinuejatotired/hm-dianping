@@ -1,16 +1,14 @@
 package com.hmdp.utils;
 
-import com.esotericsoftware.minlog.Log;
-
 public class RedisConstants {
     public static final String LOGIN_CODE_KEY = "login:code:";
     public static final Long LOGIN_CODE_TTL = 2L;
-    public static final String LOGIN_USER_KEY = "login:token:";
+    public static final String LOGIN_USER_KEY = "login:token:access:";
     public static final String LOGIN_USERINFO_MAP = "login:userinfo:";
-    public static final String LOGIN_REFRESH_USER_KEY = "login:refresh:user:";
-    public static final String LOGIN_VALID_VERSION_KEY = "login:valid:version:";
+    public static final String LOGIN_REFRESH_USER_KEY = "login:token:refresh:";
+    public static final String LOGIN_VALID_VERSION_KEY = "token:version:valid:";
     public static final Long LOGIN_USER_TTL = 36000L;
-    public static final String TOKEN_VERSION_KEY = "token:refresh:version:";
+    public static final String CURRENT_TOKEN_VERSION_KEY = "token:version:current:";
     public static final Long CACHE_NULL_TTL = 2L;
     public static final Long LOGIN_TOKEN_TTL_SECONDS = 1800L;
     public static final Long LOGIN_REFRESHTOKEN_TTL_SECONDS = (7 * 24 * 60 * 60L);
