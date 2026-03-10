@@ -3,6 +3,7 @@ package com.hmdp.controller;
 
 import com.hmdp.dto.Result;
 import com.hmdp.service.IVoucherOrderService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +21,7 @@ import javax.annotation.Resource;
  */
 @RestController
 @RequestMapping("/voucher-order")
+@Slf4j
 public class VoucherOrderController {
     @Resource
     private IVoucherOrderService voucherOrderService;
@@ -29,6 +31,9 @@ public class VoucherOrderController {
     }
     @PostMapping("seckill/saveOrder/{id}")
     public Result saveSeckillVoucherOrder(@PathVariable("id") Long voucherId) {
-        return voucherOrderService.saveOrder(voucherId);
+
+        Result result = voucherOrderService.saveOrder(voucherId);
+
+        return result;
     }
 }

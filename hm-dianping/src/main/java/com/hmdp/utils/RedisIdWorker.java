@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
@@ -47,11 +48,14 @@ public class RedisIdWorker {
             Log.info("current userId is null");
             return -1L;
         }
-        String key = RedisConstants.TOKEN_VERSION_KEY +userId;
+        String key = RedisConstants.CURRENT_TOKEN_VERSION_KEY +userId;
         Long count = stringRedisTemplate.opsForValue().increment(key);
-        log.info("user {} current version is {}",userId,count);
-        if(count==null){
-            return -1L;
+// 如果是第一次increment（返回1），说明key是新建的，设置过期时间
+        if (count == 1) {
+            stringRedisTemplate.expire(key, 8, TimeUnit.DAYS);
+            log.debug("Set initial expire for new version key: {}", key);
+        } else {
+            log.debug("Version key already exists (value={}), expire will be handled in Lua", count);
         }
         return count;
     }
