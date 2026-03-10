@@ -1,7 +1,7 @@
 -- KEYS[1]: tokenKey = "login:token:" .. userId
 -- KEYS[2]: versionKey = "token:version:" .. userId
 -- KEYS[3]: refreshKey = "refresh:user:" .. userId
-
+-- KEYS[4]? newVersionKey (最新version号的 key，过期时间和 refreshKey 一致)
 -- ARGV[1]: oldToken (请求携带的 token)
 -- ARGV[2]: newToken (新生成的 token)
 -- ARGV[3]: expireSeconds (新 token 的过期秒数)
@@ -11,13 +11,14 @@
 local tokenKey = KEYS[1]
 local versionKey = KEYS[2]
 local refreshKey = KEYS[3]
-
+local newVersionKey = KEYS[4]
 local oldToken = ARGV[1]
 local newToken = ARGV[2]
 local tokenExpireSeconds = tonumber(ARGV[3])
 local oldVersion = tonumber(ARGV[4])
 local clientRefreshToken = ARGV[5]
-
+local newVersionExpireSeconds=tonumber(ARGV[6])
+local refreshExpireSeconds = tonumber(ARGV[7])
 -- 1. 验证 refreshToken
 local storedRefresh = redis.call('GET', refreshKey)
 if storedRefresh == nil then
@@ -52,6 +53,8 @@ end
 
 -- 5. 更新 token
 redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
-
+redis.call('EXPIRE',newVersionKey,newVersionExpireSeconds)
+redis.call('EXPIRE', refreshKey, refreshExpireSeconds)
+redis.call('EXPIRE',versionKey,refreshExpireSeconds)
 -- 6. 返回成功
 return 200  -- SUCCESS
