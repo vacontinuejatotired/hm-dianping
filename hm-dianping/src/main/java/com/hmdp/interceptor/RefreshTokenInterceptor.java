@@ -301,6 +301,76 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      * @param token
      * @return
      */
+
+    /**
+     * 刷新过期token以及redis中的refreshToken
+     * 需自己在方法外重新设置请求头，该方法内修改请求头无效
+     * redis中不存在的refreshToken不会刷新
+     * @param request
+     * @param response
+     * @param e
+     * @return
+     */
+    public HttpServletResponse handleExpiredToken(HttpServletRequest request, HttpServletResponse response, ExpiredJwtException e)  {
+        String token = request.getHeader("authorization");
+        log.info("token  expired");
+        //我恨你 Long userId = (Long) e.getClaims().get("userId")
+        Long userId,versionFromToken;
+        try {
+            userId = Long.valueOf(String.valueOf(e.getClaims().get("userId").toString()));
+            versionFromToken = Long.valueOf(String.valueOf(e.getClaims().get("version").toString()));
+        } catch (NumberFormatException ex) {
+            log.warn("无法从过期 token 中解析 userId: {}", ex.getMessage());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return response;
+        }
+        //检查是否携带refreshToken
+        // Redis 中 refresh token 的 key
+        String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + userId;
+        String tokenKey = RedisConstants.LOGIN_USER_KEY + userId;
+        String refreshToken = request.getHeader("Refresh-Token");
+        String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
+        String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
+        Long newVersion = redisIdWorker.nextVersion();
+        String newVersionKey = RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId;
+        Long newVersionExpireSeconds = RedisConstants.NEW_VERSION_TTL_SECONDS;
+        //发来的请求没refreshToken那不就是假的？
+        token = JWT_UTIL.generateToken(userId, RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,newVersion);
+        if (refreshToken == null) {
+            log.info("RefreshToken is null,failed to refresh token");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return response;
+        }
+        List<String >args = new ArrayList<>();
+        args.add(refreshToken);
+        args.add(newRefreshToken);
+        args.add(String.valueOf(TimeUnit.DAYS.toSeconds(7)));
+        args.add(token);
+        args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(RedisConstants.LOGIN_JWT_TTL_MINUTES)));
+        args.add(versionFromToken.toString());
+        args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
+        args.add(newVersion.toString());
+        args.add(newVersionExpireSeconds.toString());
+        //refreshToken设置为7天的过期时间
+        // 判断是否存在 refresh token
+        List<String> keys = new ArrayList<>();
+        keys.add(refreshKey);
+        keys.add(tokenKey);
+        keys.add(versionKey);
+        keys.add(newVersionKey);
+        Long luaResult = stringRedisTemplate.execute(refreshDeadTokenScript, keys, args.toArray());
+        if(luaResult.equals(TokenRefreshCode.SUCCESS.getCode())) {
+            log.info("Refresh token success");
+        }
+        else{
+            log.info("Refresh token fail code: {}", TokenRefreshCode.getDefaultMessage(luaResult));
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return response;
+        }
+        response.setHeader("authorization",token);
+        response.setHeader("Refresh-Token",newRefreshToken);
+        return response;
+    }
     private boolean valiateClaimAndSaveUser(HttpServletResponse response, Claims claims, String token) {
         if (claims == null || claims.isEmpty()) {
             return false;
@@ -423,110 +493,4 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         UserHolder.remove();
         log.info("用户信息已清除");
     }
-    /**
-     * 刷新过期token以及redis中的refreshToken
-     * 需自己在方法外重新设置请求头，该方法内修改请求头无效
-     * redis中不存在的refreshToken不会刷新
-     * @param request
-     * @param response
-     * @param e
-     * @return
-     */
-    public HttpServletResponse handleExpiredToken(HttpServletRequest request, HttpServletResponse response, ExpiredJwtException e)  {
-        String token = request.getHeader("authorization");
-        log.info("token  expired");
-        //我恨你 Long userId = (Long) e.getClaims().get("userId")
-        Long userId,versionFromToken;
-        try {
-            userId = Long.valueOf(String.valueOf(e.getClaims().get("userId").toString()));
-            versionFromToken = Long.valueOf(String.valueOf(e.getClaims().get("version").toString()));
-        } catch (NumberFormatException ex) {
-            log.warn("无法从过期 token 中解析 userId: {}", ex.getMessage());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return response;
-        }
-        //检查是否携带refreshToken
-        // Redis 中 refresh token 的 key
-        String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + userId;
-        String tokenKey = RedisConstants.LOGIN_USER_KEY + userId;
-        String refreshToken = request.getHeader("Refresh-Token");
-        String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
-        String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
-        Long newVersion = redisIdWorker.nextVersion();
-        String newVersionKey = RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId;
-        Long newVersionExpireSeconds = RedisConstants.NEW_VERSION_TTL_SECONDS;
-        //发来的请求没refreshToken那不就是假的？
-        token = JWT_UTIL.generateToken(userId, RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,newVersion);
-        if (refreshToken == null) {
-            log.info("RefreshToken is null,failed to refresh token");
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return response;
-        }
-        List<String >args = new ArrayList<>();
-        args.add(refreshToken);
-        args.add(newRefreshToken);
-        args.add(String.valueOf(TimeUnit.DAYS.toSeconds(7)));
-        args.add(token);
-        args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(RedisConstants.LOGIN_JWT_TTL_MINUTES)));
-        args.add(versionFromToken.toString());
-        args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
-        args.add(newVersion.toString());
-        args.add(newVersionExpireSeconds.toString());
-        //refreshToken设置为7天的过期时间
-        // 判断是否存在 refresh token
-        List<String> keys = new ArrayList<>();
-        keys.add(refreshKey);
-        keys.add(tokenKey);
-        keys.add(versionKey);
-        keys.add(newVersionKey);
-        Long luaResult = stringRedisTemplate.execute(refreshDeadTokenScript, keys, args.toArray());
-        if(luaResult.equals(TokenRefreshCode.SUCCESS.getCode())) {
-            log.info("Refresh token success");
-        }
-        else{
-            log.info("Refresh token fail code: {}", TokenRefreshCode.getDefaultMessage(luaResult));
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return response;
-        }
-//        if(luaResult.getCode() == 0){
-//            log.info("Refresh all token lua execute failed cause:{}",luaResult.getMessage());
-//            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-//            return response;
-//        }
-//        if(luaResult.getCode() == 1){
-//            log.info("update expired token ,{}",luaResult.getMessage());
-//        }
-//        if(luaResult.getCode() == 2){
-//            log.error("{}",luaResult.getMessage());
-//            response.setStatus(HttpServletResponse.SC_NOT_ACCEPTABLE);
-//            return response;
-//        }
-        response.setHeader("authorization",token);
-        response.setHeader("Refresh-Token",newRefreshToken);
-        return response;
-    }
-//        boolean existed = stringRedisTemplate.hasKey(refreshKey);
-//        if (!existed) {
-//            log.info("用户{} redis 不存在对应的refreshToken",userId);
-//            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-//            return false;
-//        } else {
-//            // 已存在 → 检查是否为redis中的，-》删除旧的，重新生成新的（强制覆盖，实现单点登录）
-//            String oldRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-//            if (!refreshToken.equals(oldRefreshToken)) {
-//                log.info("refreshToken {} is old", refreshToken);
-//                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-//                return false;
-//            }
-//            stringRedisTemplate.delete(refreshKey);
-//            stringRedisTemplate.opsForValue().set(refreshKey, newRefreshToken, 7, TimeUnit.DAYS);
-//            log.debug("为用户 {} 刷新 refresh token（旧 token 已失效）", userId);
-    //下面这段应该不需要，未过期的走正常请求了
-//            if(stringRedisTemplate.hasKey(RedisConstants.LOGIN_USER_KEY + userId)){
-//                log.info("未过期的token泄露");
-//                return false;
-//            }
-////        }
-//        response.setHeader("authorization", token);
-//        response.setHeader("Refresh-Token", newRefreshToken);
 }
