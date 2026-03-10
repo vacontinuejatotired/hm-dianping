@@ -4,14 +4,13 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.json.JSONUtil;
+import com.hmdp.Enum.TokenRefreshCode;
 import com.hmdp.dto.LuaResult;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
+import com.hmdp.interceptor.annotation.RecordTime;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.JwtUtil;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RedisIdWorker;
-import com.hmdp.utils.UserHolder;
+import com.hmdp.utils.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +20,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.time.temporal.ChronoUnit;
@@ -34,22 +34,26 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     private StringRedisTemplate stringRedisTemplate;
     private IUserService userService;
-    public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate, IUserService userService,RedisIdWorker redisIdWorker) {
+    private DefaultRedisScript<Long> refreshDeadlineTokenScript;
+    private DefaultRedisScript<Long> refreshDeadTokenScript;
+    private RedisIdWorker redisIdWorker;
+    public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate, IUserService userService,RedisIdWorker redisIdWorker,DefaultRedisScript refreshDeadTokenScript,DefaultRedisScript refreshDeadlineTokenScript) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.userService = userService;
         this.redisIdWorker = redisIdWorker;
+        this.refreshDeadTokenScript = refreshDeadTokenScript;
+        this.refreshDeadlineTokenScript = refreshDeadlineTokenScript;
     }
-    private static final DefaultRedisScript<String > REDIS_REFRESH_TOKEN_SCRIPT;
-    private static final DefaultRedisScript<String> REDIS_REFRESH_REFRESH_TOKEN_SCRIPT;
-    private RedisIdWorker redisIdWorker;
-    static {
-        REDIS_REFRESH_TOKEN_SCRIPT = new DefaultRedisScript<>();
-        REDIS_REFRESH_TOKEN_SCRIPT.setResultType(String.class);
-        REDIS_REFRESH_TOKEN_SCRIPT.setLocation(new ClassPathResource("RefreshToken.lua"));
-        REDIS_REFRESH_REFRESH_TOKEN_SCRIPT = new DefaultRedisScript<>();
-        REDIS_REFRESH_REFRESH_TOKEN_SCRIPT.setResultType(String.class);
-        REDIS_REFRESH_REFRESH_TOKEN_SCRIPT.setLocation(new ClassPathResource("RefreshRefreshToken.lua"));
-    }
+//    private static final DefaultRedisScript<String > REDIS_REFRESH_TOKEN_SCRIPT;
+//    private static final DefaultRedisScript<String> REDIS_REFRESH_REFRESH_TOKEN_SCRIPT;
+//    static {
+//        REDIS_REFRESH_TOKEN_SCRIPT = new DefaultRedisScript<>();
+//        REDIS_REFRESH_TOKEN_SCRIPT.setResultType(String.class);
+//        REDIS_REFRESH_TOKEN_SCRIPT.setLocation(new ClassPathResource("RefreshToken.lua"));
+//        REDIS_REFRESH_REFRESH_TOKEN_SCRIPT = new DefaultRedisScript<>();
+//        REDIS_REFRESH_REFRESH_TOKEN_SCRIPT.setResultType(String.class);
+//        REDIS_REFRESH_REFRESH_TOKEN_SCRIPT.setLocation(new ClassPathResource("RefreshRefreshToken.lua"));
+//    }
 //    @Override
 //    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
 //        String uri = request.getRequestURI();
@@ -118,102 +122,175 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String uri = request.getRequestURI();
-        if (uri.equals("/blog/hot") || uri.startsWith("/blog/hot")
-                || uri.equals("/user/login")
-                || uri.equals("/user/code")
-                || uri.equals("/shop-type/list")) {
-            log.info("公开路径，直接放行: {}", uri);
-            return true;
-        }
+        // 整个方法开始计时
+        long methodStartTime = System.currentTimeMillis();
+        String requestURI = request.getRequestURI();
 
-        log.info("拦截路径 {}", request.getRequestURI());
-        String token = request.getHeader("authorization");
-        if (token == null) {
-            log.info("token is null");
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return false;
-        }
-
-        Claims claims;
         try {
-            claims = JWT_UTIL.valiateAndGetClaimFromToken(token);
-            log.info("解析token成功,{}未过期", claims);
-            // 1. 先验证用户信息并保存到 ThreadLocal
-            if(valiateClaimAndSaveUser(response, claims, token)){
-                // 2. 检查token是否需要刷新（剩余时间 < 10分钟）
-                Date expiration = claims.getExpiration();
-                long now = System.currentTimeMillis();
-                long timeToExpire = expiration.getTime() - now;
-                long tenMinutes = 10 * 60 * 1000; // 10分钟
-                if (timeToExpire < tenMinutes && timeToExpire > 0) {
-                    // 3. 只有在token快要过期时才刷新
-                    log.info("token has expired");
-                    Long version = claims.get("version", Long.class);
-                    //正常刷新的token不修改version
-                    String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,version);
-                    String tokenKey = RedisConstants.LOGIN_USER_KEY + UserHolder.getUserId();
-                    String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + UserHolder.getUserId();
-                    String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + UserHolder.getUserId();
-                    String clientRefreshToken = request.getHeader("Refresh-Token");
-                    String newVersionKey = RedisConstants.TOKEN_VERSION_KEY + UserHolder.getUserId();
-                    Long newVersionExpireTime = RedisConstants.NEW_VERSION_TTL_SECONDS;
-                    Long refreshTokenAndValidVersionExpireSeconds = RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS;
-                    List<String> args = new ArrayList<>();
-                    args.add(token);
-                    args.add(newToken);
-                    args.add(String.valueOf((60*RedisConstants.LOGIN_JWT_TTL_MINUTES)));
-                    args.add(version.toString());
-                    args.add(clientRefreshToken);
-                    args.add(newVersionExpireTime.toString());
-                    args.add(refreshTokenAndValidVersionExpireSeconds.toString());
-                    List<String> keys = new ArrayList<>();
-                    keys.add(tokenKey);
-                    keys.add(versionKey);
-                    keys.add(refreshKey);
-                    keys.add(newVersionKey);
-                    String execute = stringRedisTemplate.execute(REDIS_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
-                    LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
-                    if(luaResult.getCode() == 0){
-                        log.info("Refresh accessToken lua execute failed case:{}", luaResult.getMessage());
-                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                        return false;
-                    }
-                    log.info("set token {}", luaResult.getMessage());
-                    response.setHeader("authorization", newToken);
-                } else {
-                    log.info("Token还有效（剩余{}分钟），无需刷新", timeToExpire / (60 * 1000));
-                }
+            // 公开路径检查 - 开始计时
+            long publicPathStartTime = System.currentTimeMillis();
+            String uri = request.getRequestURI();
+            if (uri.equals("/blog/hot") || uri.startsWith("/blog/hot")
+                    || uri.equals("/user/login")
+                    || uri.equals("/user/code")
+                    || uri.equals("/shop-type/list")) {
+                log.info("【公开路径检查】耗时: {} ms", System.currentTimeMillis() - publicPathStartTime);
+                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
                 return true;
             }
 
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return false;
+            log.info("拦截路径 {}", request.getRequestURI());
+            log.info("【公开路径检查】耗时: {} ms", System.currentTimeMillis() - publicPathStartTime);
 
-        } catch (ExpiredJwtException e) {
-            //TODO 用户信息需要存入上下文
-            //过期的情况下redis中不存在对应token，应该直接刷新一个新token
-            boolean result = valiateClaimAndSaveUser(response, e.getClaims(), token);
-            if(!result){
+
+            // Token空值检查 - 开始计时
+            long tokenNullCheckStartTime = System.currentTimeMillis();
+            String token = request.getHeader("authorization");
+            if (token == null) {
+                log.info("token is null");
+                log.info("【Token空值检查】耗时: {} ms", System.currentTimeMillis() - tokenNullCheckStartTime);
+                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED, "token is null");
+                return false;
+            }
+            if (request.getHeader("Refresh-Token") == null) {
+                log.info("Refresh-Token is null");
+                log.info("【Token空值检查】耗时: {} ms", System.currentTimeMillis() - tokenNullCheckStartTime);
+                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED, "Refresh-Token is null");
+                return false;
+            }
+            log.info("【Token空值检查】耗时: {} ms", System.currentTimeMillis() - tokenNullCheckStartTime);
+
+            Claims claims;
+            try {
+                // Token解析 - 开始计时
+                long tokenParseStartTime = System.currentTimeMillis();
+                response.setHeader("authorization", token);
+                response.setHeader("Refresh-Token", request.getHeader("Refresh-Token"));
+                claims = JWT_UTIL.valiateAndGetClaimFromToken(token);
+                log.info("解析token成功,{}未过期", claims);
+                log.info("【Token解析】耗时: {} ms", System.currentTimeMillis() - tokenParseStartTime);
+
+                // 验证用户信息 - 开始计时
+                long validateUserStartTime = System.currentTimeMillis();
+                if (valiateClaimAndSaveUser(response, claims, token)) {
+                    log.info("【验证用户信息】耗时: {} ms", System.currentTimeMillis() - validateUserStartTime);
+
+                    // 检查token是否需要刷新 - 开始计时
+                    long checkExpireStartTime = System.currentTimeMillis();
+                    Date expiration = claims.getExpiration();
+                    long now = System.currentTimeMillis();
+                    long timeToExpire = expiration.getTime() - now;
+                    long tenMinutes = 10 * 60 * 1000;
+                    log.info("【检查token过期】耗时: {} ms", System.currentTimeMillis() - checkExpireStartTime);
+
+                    if (timeToExpire < tenMinutes && timeToExpire > 0) {
+                        log.info("token has close deadline");
+
+                        // 刷新token流程 - 开始计时
+                        long refreshTokenStartTime = System.currentTimeMillis();
+
+                        Long version = claims.get("version", Long.class);
+                        String newToken = JWT_UTIL.generateToken(UserHolder.getUserId(), RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES, version);
+
+                        String tokenKey = RedisConstants.LOGIN_USER_KEY + UserHolder.getUserId();
+                        String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + UserHolder.getUserId();
+                        String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + UserHolder.getUserId();
+                        String clientRefreshToken = request.getHeader("Refresh-Token");
+                        String newVersionKey = RedisConstants.CURRENT_TOKEN_VERSION_KEY + UserHolder.getUserId();
+                        Long newVersionExpireTime = RedisConstants.NEW_VERSION_TTL_SECONDS;
+                        Long refreshTokenAndValidVersionExpireSeconds = RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS;
+
+                        List<String> args = new ArrayList<>();
+                        args.add(token);
+                        args.add(newToken);
+                        args.add(String.valueOf((60 * RedisConstants.LOGIN_JWT_TTL_MINUTES)));
+                        args.add(version.toString());
+                        args.add(clientRefreshToken);
+                        args.add(newVersionExpireTime.toString());
+                        args.add(refreshTokenAndValidVersionExpireSeconds.toString());
+
+                        List<String> keys = new ArrayList<>();
+                        keys.add(tokenKey);
+                        keys.add(versionKey);
+                        keys.add(refreshKey);
+                        keys.add(newVersionKey);
+
+                        // Lua脚本执行 - 开始计时
+                        long luaExecuteStartTime = System.currentTimeMillis();
+                        Long luaResult = stringRedisTemplate.execute(refreshDeadlineTokenScript, keys, args.toArray());
+                        log.info("【Lua脚本执行】耗时: {} ms", System.currentTimeMillis() - luaExecuteStartTime);
+
+                        if (!luaResult.equals(TokenRefreshCode.SUCCESS.getCode())) {
+                            log.info("Refresh accessToken lua execute failed case:{}", TokenRefreshCode.getDefaultMessage(luaResult));
+                            log.info("【刷新token总耗时】: {} ms", System.currentTimeMillis() - refreshTokenStartTime);
+                            log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            return false;
+                        }
+
+                        log.info("set token {}", TokenRefreshCode.getDefaultMessage(luaResult));
+                        response.setHeader("authorization", newToken);
+
+                        log.info("【刷新token总耗时】: {} ms", System.currentTimeMillis() - refreshTokenStartTime);
+                    } else {
+                        log.info("Token还有效（剩余{}分钟），无需刷新", timeToExpire / (60 * 1000));
+                        log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                        return true;
+                    }
+
+                    log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                    return true;
+                }
+
+                log.info("【验证用户信息】耗时: {} ms", System.currentTimeMillis() - validateUserStartTime);
+                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return false;
+
+            } catch (ExpiredJwtException e) {
+                // 过期token处理 - 开始计时
+                long expiredTokenHandleStartTime = System.currentTimeMillis();
+
+                boolean result = valiateClaimAndSaveUser(response, e.getClaims(), token);
+                if (!result) {
+                    log.info("【过期token处理】耗时: {} ms", System.currentTimeMillis() - expiredTokenHandleStartTime);
+                    log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return false;
+                }
+
+                response = handleExpiredToken(request, response, e);
+
+                log.info("【过期token处理】耗时: {} ms", System.currentTimeMillis() - expiredTokenHandleStartTime);
+
+                if (response.getStatus() == HttpServletResponse.SC_UNAUTHORIZED) {
+                    log.info("token update failed");
+                    log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                    return false;
+                }
+                if (response.getStatus() == HttpServletResponse.SC_NOT_ACCEPTABLE) {
+                    log.error("token can not update");
+                    log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                    return false;
+                }
+
+                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
+                return true;
+
+            } catch (Exception e) {
+                log.error(e.getMessage());
+                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return false;
             }
-            response = handleExpiredToken(request, response, e);
-            if(response.getStatus() == HttpServletResponse.SC_UNAUTHORIZED){
-                log.info("token update failed");
-                return false;
+        } finally {
+            // 最终总耗时统计
+            long totalTime = System.currentTimeMillis() - methodStartTime;
+            if (totalTime > 100) {
+                log.warn("【性能告警】preHandle处理耗时过长: {} ms, URI: {}", totalTime, requestURI);
             }
-            if(response.getStatus() == HttpServletResponse.SC_NOT_ACCEPTABLE){
-                log.error("token can not update");
-                return false;
-            }
-
-            return true;  // 添加这一行，异常处理成功后返回true
-
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return false;
         }
     }
     /**
@@ -228,9 +305,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         if (claims == null || claims.isEmpty()) {
             return false;
         }
-
-        log.info("claims {}", claims);
-
         // 安全获取 userId - 兼容 Number 和 String 类型
         Long userId;
         try {
@@ -239,7 +313,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 log.error("userId not found in claims");
                 return false;
             }
-
             if (userIdObj instanceof Number) {
                 userId = ((Number) userIdObj).longValue();
             } else if (userIdObj instanceof String) {
@@ -248,7 +321,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 log.error("Unexpected userId type: {}", userIdObj.getClass());
                 return false;
             }
-            log.info("userId: {} (original type: {})", userId, userIdObj.getClass());
         } catch (Exception e) {
             log.error("Failed to parse userId from claims", e);
             return false;
@@ -329,7 +401,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         try {
             UserHolder.saveUserId(userId);
             UserHolder.saveUserDTO(userDTO);
-            log.info("Saved to ThreadLocal - userId: {}, userDTO: {}", userId, userDTO);
         } catch (Exception e) {
             log.error("Failed to save to ThreadLocal for userId: {}", userId, e);
             return false;
@@ -368,9 +439,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         Long userId,versionFromToken;
         try {
             userId = Long.valueOf(String.valueOf(e.getClaims().get("userId").toString()));
-            log.info("从过期 token 中提取 userId: {}", userId);
             versionFromToken = Long.valueOf(String.valueOf(e.getClaims().get("version").toString()));
-            log.info("从过期 token 中提取 version: {}", versionFromToken);
         } catch (NumberFormatException ex) {
             log.warn("无法从过期 token 中解析 userId: {}", ex.getMessage());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -384,7 +453,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
         String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
         Long newVersion = redisIdWorker.nextVersion();
-        String newVersionKey = RedisConstants.TOKEN_VERSION_KEY + userId;
+        String newVersionKey = RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId;
         Long newVersionExpireSeconds = RedisConstants.NEW_VERSION_TTL_SECONDS;
         //发来的请求没refreshToken那不就是假的？
         token = JWT_UTIL.generateToken(userId, RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES,newVersion);
@@ -410,23 +479,28 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         keys.add(tokenKey);
         keys.add(versionKey);
         keys.add(newVersionKey);
-        String execute = stringRedisTemplate.execute(REDIS_REFRESH_REFRESH_TOKEN_SCRIPT, keys, args.toArray());
-        LuaResult luaResult = JSONUtil.toBean(execute, LuaResult.class);
-        if(luaResult.getCode() == 0){
-            log.info("Refresh all token lua execute failed cause:{}",luaResult.getMessage());
+        Long luaResult = stringRedisTemplate.execute(refreshDeadTokenScript, keys, args.toArray());
+        if(luaResult.equals(TokenRefreshCode.SUCCESS.getCode())) {
+            log.info("Refresh token success");
+        }
+        else{
+            log.info("Refresh token fail code: {}", TokenRefreshCode.getDefaultMessage(luaResult));
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return response;
         }
-        if(luaResult.getCode() == 1){
-            log.info("update expired token ,{}",luaResult.getMessage());
-        }
-        if(luaResult.getCode() == 2){
-            log.error("{}",luaResult.getMessage());
-            response.setStatus(HttpServletResponse.SC_NOT_ACCEPTABLE);
-            response.setHeader("authorization", request.getHeader("authorization"));
-            response.setHeader("Refresh-Token", request.getHeader("refresh-token"));
-            return response;
-        }
+//        if(luaResult.getCode() == 0){
+//            log.info("Refresh all token lua execute failed cause:{}",luaResult.getMessage());
+//            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+//            return response;
+//        }
+//        if(luaResult.getCode() == 1){
+//            log.info("update expired token ,{}",luaResult.getMessage());
+//        }
+//        if(luaResult.getCode() == 2){
+//            log.error("{}",luaResult.getMessage());
+//            response.setStatus(HttpServletResponse.SC_NOT_ACCEPTABLE);
+//            return response;
+//        }
         response.setHeader("authorization",token);
         response.setHeader("Refresh-Token",newRefreshToken);
         return response;

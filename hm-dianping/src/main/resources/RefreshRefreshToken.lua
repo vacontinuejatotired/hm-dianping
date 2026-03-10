@@ -15,58 +15,50 @@
 -- ARGV[6]: version (从过期 JWT 中解析出的旧版本号)
 -- ARGV[7]: versionExpireSeconds (版本号的过期秒数，与 refreshToken 保持一致)
 -- ARGV[8]: newVersion (新生成的版本号，例如当前时间戳)
+
 local RefreshTokenKey = KEYS[1]
 local tokenKey = KEYS[2]
-local validVersionKey =KEYS[3]
+local validVersionKey = KEYS[3]
 local newVersionKey = KEYS[4]
+
 local oldRefreshToken = ARGV[1]
 local newRefreshToken = ARGV[2]
 local refreshTokenExpireSeconds = tonumber(ARGV[3])
-local newToken =ARGV[4]
+local newToken = ARGV[4]
 local tokenExpireSeconds = tonumber(ARGV[5])
 local version = tonumber(ARGV[6])
 local versionExpireSeconds = tonumber(ARGV[7])
 local newVersion = tonumber(ARGV[8])
 local newVersionExpireSeconds = tonumber(ARGV[9])
-local orginVersion =redis.call('get', validVersionKey)
+
+-- 1. 检查原始版本号是否存在
+local orginVersion = redis.call('get', validVersionKey)
 if not orginVersion then
-    local result = {
-        code = 0,
-        message = 'orginVersion is null'
-    }
-    return cjson.encode(result)
+    return 431  -- ORIGIN_VERSION_NULL
 end
---比登录时间还早的token不可使用
+
+-- 2. 比登录时间还早的token不可使用
 if tonumber(orginVersion) > version then
-    local result = {        -- 直接初始化为 table
-        code = 2,
-        message = 'token exists before login'
-    }
-    return cjson.encode(result)
+    return 413  -- TOKEN_BEFORE_LOGIN
 end
+
+-- 3. 检查RefreshToken是否存在
 local exists = redis.call('EXISTS', RefreshTokenKey)
 if exists == 0 then
-    return '{"code":0,"message":"RefreshToken key not found"}'
+    return 421  -- REFRESH_TOKEN_NOT_FOUND
 end
+
+-- 4. 验证RefreshToken是否匹配
 local storedToken = redis.call('GET', RefreshTokenKey)
 if storedToken ~= oldRefreshToken then
-    return '{"code":0,"message":"RefreshToken mismatch"}'
+    return 422  -- REFRESH_TOKEN_MISMATCH
 end
---redis.call('DEL', RefreshTokenKey)
---删除操作增加网络开销，可简化
+
+-- 5. 更新所有token和版本信息
 redis.call('SET', RefreshTokenKey, newRefreshToken, 'EX', refreshTokenExpireSeconds)
---redis.call('DEL',tokenKey)
-redis.call('SET',tokenKey,newToken,'EX',tokenExpireSeconds)
---redis.call('del',versionKey)
-redis.call('SET', validVersionKey,newVersion,'EX',versionExpireSeconds)
-redis.call('EXPIRE',newVersionKey,newVersionExpireSeconds)
-local result = {
-    code = 1,
-    message = "update all token and version success",
-    data = {
-        newToken = newToken,
-        newRefreshToken = newRefreshToken,
-        newVersion = tostring(newVersion)
-    }
-}
-return cjson.encode(result)
+redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
+redis.call('SET', validVersionKey, newVersion, 'EX', versionExpireSeconds)
+redis.call('EXPIRE', newVersionKey, newVersionExpireSeconds)
+
+-- 6. 返回成功
+return 200  -- SUCCESS
