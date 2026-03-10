@@ -14,6 +14,7 @@ public class loginInterceptor implements HandlerInterceptor {
 
        if(UserHolder.getUserId()==null){
            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+           log.info("thread's userId is null");
            return false;
        }
        return true;

@@ -49,6 +49,9 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     private RabbitTemplate rabbitTemplate;
     @Resource
     private ISeckillVoucherService seckillVoucherService;
+
+    @Resource(name = "seckillScript")
+    private DefaultRedisScript<Long> seckillScript;
     private static final String LOCK_KET_PREFIX = "voucher:order:lock";
     private static final int MAX_RETRY = 3;
 
@@ -153,22 +156,13 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         log.info("order:{} has been down", voucherOrder.getId());
     }
 
-    /**
-     * 设置lua脚本
-     */
-    private static final DefaultRedisScript<Long> REDIS_UNLOCK_SCRIPT;
 
-    static {
-        REDIS_UNLOCK_SCRIPT = new DefaultRedisScript<>();
-        REDIS_UNLOCK_SCRIPT.setResultType(Long.class);
-        REDIS_UNLOCK_SCRIPT.setLocation(new ClassPathResource("MqSeckill.lua"));
-    }
 
     @Override
     public Result querySeckillVoucher(Long voucherId) {
         Long userId = UserHolder.getUserId();
         Long orderId = redisIdWorker.nextId("order");
-        Long result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(), voucherId.toString(), userId.toString(), orderId.toString());
+        Long result = stringRedisTemplate.execute(seckillScript, Collections.emptyList(), voucherId.toString(), userId.toString(), orderId.toString());
         int r = result.intValue();
         //0代表才加入缓存，1代表库存不足，2代表重复下单
         //集群部署的redis，你这怎么查？
@@ -198,44 +192,150 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result saveOrder(Long voucherId) {
+        long startTime = System.currentTimeMillis();
         Long userId = UserHolder.getUserId();
-        //查询库存，然后扣减，lua脚本实现
+
+        // 1. 生成订单ID
+        long orderIdGenStart = System.currentTimeMillis();
         Long orderId = redisIdWorker.nextId("order");
-        List<String> args = new ArrayList<>();
-        args.add(String.valueOf(voucherId));
-        args.add(String.valueOf(userId));
-        args.add(String.valueOf(orderId));
-        try {
-            int result = stringRedisTemplate.execute(REDIS_UNLOCK_SCRIPT, Collections.emptyList(), args.toArray()).intValue();
-            //0->扣减 1->不足 2->已下单
-            if (result != 0) {
-                return Result.fail(result == 1 ? "库存不足" : "重复下单");
-            }
-        } catch (Exception e) {
-            log.info("执行Lua脚本失败");
-            throw new RuntimeException(e);
+        log.info("【生成订单ID】耗时: {} ms", System.currentTimeMillis() - orderIdGenStart);
+
+        // 2. 执行Lua脚本扣减库存
+        Long luaResult = executeSeckillLua(voucherId, userId, orderId);
+        if (!luaResult .equals( SeckillOrderCode.SUCCESS.getCode())) {
+            log.info("【Lua脚本执行】耗时: {} ms", System.currentTimeMillis() - startTime);
+            return Result.fail(SeckillOrderCode.getDefaultMessage(luaResult));
         }
+
+        // 3. 构建订单对象
+        long buildOrderStart = System.currentTimeMillis();
+        VoucherOrder voucherOrder = buildVoucherOrder(userId, voucherId, orderId);
+        log.info("【构建订单对象】耗时: {} ms", System.currentTimeMillis() - buildOrderStart);
+
+        // 4. 保存订单到数据库（耗时操作）
+        boolean saved = saveOrderToDatabase(voucherOrder);
+        if (!saved) {
+            log.info("【数据库操作】耗时: {} ms", System.currentTimeMillis() - startTime);
+            return Result.fail("订单创建失败，请稍后重试");
+        }
+
+        // 5. 发送MQ消息（异步操作）
+        sendMqMessage(voucherOrder);
+
+        long totalTime = System.currentTimeMillis() - startTime;
+        log.info("【saveOrder总耗时】: {} ms, 订单ID: {}", totalTime, orderId);
+
+        // 耗时告警
+        if (totalTime > 500) {
+            log.warn("【性能告警】saveOrder处理时间过长: {} ms, 用户: {}, 优惠券: {}",
+                    totalTime, userId, voucherId);
+        }
+
+        return Result.ok(orderId);
+    }
+
+    /**
+     * 执行秒杀Lua脚本
+     */
+    private Long executeSeckillLua(Long voucherId, Long userId, Long orderId) {
+        long startTime = System.currentTimeMillis();
+
+        List<String> args = Arrays.asList(
+                String.valueOf(voucherId),
+                String.valueOf(userId),
+                String.valueOf(orderId)
+        );
+
+        try {
+            Long result = stringRedisTemplate.execute(
+                    seckillScript,
+                    Collections.emptyList(),
+                    args.toArray()
+            );
+
+            long costTime = System.currentTimeMillis() - startTime;
+            log.info("【executeSeckillLua】耗时: {} ms, 结果: {}", costTime, result);
+
+            // Lua脚本执行耗时告警
+            if (costTime > 100) {
+                log.warn("【性能告警】Lua脚本执行过慢: {} ms", costTime);
+            }
+
+            return result != null ? result : -1;
+        } catch (Exception e) {
+            log.error("【executeSeckillLua】执行异常", e);
+            throw new RuntimeException("Lua脚本执行失败", e);
+        }
+    }
+
+    /**
+     * 构建订单对象
+     */
+    private VoucherOrder buildVoucherOrder(Long userId, Long voucherId, Long orderId) {
         VoucherOrder voucherOrder = new VoucherOrder();
+        voucherOrder.setId(orderId);
         voucherOrder.setUserId(userId);
         voucherOrder.setVoucherId(voucherId);
         voucherOrder.setCreateTime(LocalDateTime.now());
         voucherOrder.setStatus(1);
-        //插入雪花算法生成的Id吗？是不是要考虑页分裂消耗的时间影响，
-        voucherOrder.setId(orderId);
-        boolean saved = save(voucherOrder);
-        if (!saved) {
-            return Result.fail("订单创建失败，请稍后重试");
-        }
+        return voucherOrder;
+    }
+
+    /**
+     * 保存订单到数据库（耗时操作）
+     */
+    private boolean saveOrderToDatabase(VoucherOrder voucherOrder) {
+        long startTime = System.currentTimeMillis();
+
         try {
-            //扣减库存
-            rabbitTemplate.
-                    convertAndSend(RabbitMqConstants.NORMAL_EXCHANGE_NAME
-                            , RabbitMqConstants.NORMAL_ROUTING_KEY
-                            , voucherOrder);
-        } catch (AmqpException e) {
-            log.info("异步更新库存失败");
-            throw new RuntimeException(e);
+            boolean saved = save(voucherOrder);
+            long costTime = System.currentTimeMillis() - startTime;
+
+            log.info("【saveOrderToDatabase】耗时: {} ms, 订单ID: {}, 结果: {}",
+                    costTime, voucherOrder.getId(), saved);
+
+            // 数据库操作耗时告警
+            if (costTime > 200) {
+                log.warn("【性能告警】数据库保存过慢: {} ms, 订单ID: {}",
+                        costTime, voucherOrder.getId());
+            }
+
+            return saved;
+        } catch (Exception e) {
+            long costTime = System.currentTimeMillis() - startTime;
+            log.error("【saveOrderToDatabase】异常, 耗时: {} ms, 订单ID: {}",
+                    costTime, voucherOrder.getId(), e);
+            throw new RuntimeException("订单保存失败", e);
         }
-        return Result.ok(orderId);
+    }
+
+    /**
+     * 发送MQ消息（异步操作）
+     */
+    private void sendMqMessage(VoucherOrder voucherOrder) {
+        long startTime = System.currentTimeMillis();
+
+        try {
+            rabbitTemplate.convertAndSend(
+                    RabbitMqConstants.NORMAL_EXCHANGE_NAME,
+                    RabbitMqConstants.NORMAL_ROUTING_KEY,
+                    voucherOrder
+            );
+
+            long costTime = System.currentTimeMillis() - startTime;
+            log.info("【sendMqMessage】耗时: {} ms, 订单ID: {}", costTime, voucherOrder.getId());
+
+            // MQ发送耗时告警
+            if (costTime > 100) {
+                log.warn("【性能告警】MQ发送过慢: {} ms, 订单ID: {}",
+                        costTime, voucherOrder.getId());
+            }
+
+        } catch (AmqpException e) {
+            long costTime = System.currentTimeMillis() - startTime;
+            log.error("【sendMqMessage】发送失败, 耗时: {} ms, 订单ID: {}",
+                    costTime, voucherOrder.getId(), e);
+            throw new RuntimeException("异步更新库存失败", e);
+        }
     }
 }

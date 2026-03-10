@@ -14,7 +14,7 @@ public class RedisConstants {
     public static final Long LOGIN_REFRESHTOKEN_TTL_SECONDS = (7 * 24 * 60 * 60L);
     public static final Long NEW_VERSION_TTL_SECONDS = (8*24*60*60L);
     //过期时间暂时设置为1分钟方便测试
-    public static final Long LOGIN_JWT_TTL_MINUTES = 1L;
+    public static final Long LOGIN_JWT_TTL_MINUTES = 30L;
     public static final Long CACHE_SHOP_TTL = 30L;
     public static final String CACHE_SHOP_KEY = "cache:shop:";
 
