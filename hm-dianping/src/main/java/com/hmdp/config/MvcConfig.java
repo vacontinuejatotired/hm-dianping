@@ -6,6 +6,7 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisIdWorker;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -19,6 +20,12 @@ public class MvcConfig implements WebMvcConfigurer {
     @Resource
     private IUserService userService;
 
+    @Resource(name = "refreshDeadTokenScript")
+    private DefaultRedisScript<Long> refreshDeadTokenScript;
+
+    @Resource(name = "refreshDeadlineTokenScript")
+    private DefaultRedisScript<Long> refreshDeadlineTokenScript;
+
     @Resource
     private RedisIdWorker redisIdWorker;
     @Override
@@ -31,6 +38,6 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/upload",
                         "/user/code",
                         "/shop-type/**").order(1);
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate,userService,redisIdWorker)).addPathPatterns("/**").order(0);
+        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate,userService,redisIdWorker,refreshDeadTokenScript,refreshDeadlineTokenScript)).addPathPatterns("/**").order(0);
     }
 }

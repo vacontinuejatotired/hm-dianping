@@ -1,6 +1,5 @@
 package com.hmdp.config;
 
-import com.hmdp.dto.LuaResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
