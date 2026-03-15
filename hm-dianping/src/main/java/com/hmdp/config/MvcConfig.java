@@ -15,19 +15,7 @@ import javax.annotation.Resource;
 @Configuration
 public class MvcConfig implements WebMvcConfigurer {
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Resource
-    private IUserService userService;
-
-    @Resource(name = "refreshDeadTokenScript")
-    private DefaultRedisScript<Long> refreshDeadTokenScript;
-
-    @Resource(name = "refreshDeadlineTokenScript")
-    private DefaultRedisScript<Long> refreshDeadlineTokenScript;
-
-    @Resource
-    private RedisIdWorker redisIdWorker;
+    private RefreshTokenInterceptor refreshTokenInterceptor;
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new loginInterceptor())
@@ -38,6 +26,6 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/upload",
                         "/user/code",
                         "/shop-type/**").order(1);
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate,userService,redisIdWorker,refreshDeadTokenScript,refreshDeadlineTokenScript)).addPathPatterns("/**").order(0);
+        registry.addInterceptor(refreshTokenInterceptor).addPathPatterns("/**").excludePathPatterns("/blog/hot","/user/login","/user/code","/shop-type/list").order(0);
     }
 }

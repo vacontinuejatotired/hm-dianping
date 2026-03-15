@@ -40,3 +40,6 @@ build/
 private*
 /hs_err_pid39372.log
 *.log
+*.csv
+*.jar
+*.jti
