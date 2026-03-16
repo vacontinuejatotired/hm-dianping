@@ -31,10 +31,26 @@ public class JwtUtil {
         this.resourceLoader = resourceLoader;
     }
 
+    private static volatile JwtParser parser;
+
+    private static JwtParser getParser() {
+        if (parser == null) {
+            synchronized (JwtUtil.class) {
+                if (parser == null) {
+                    parser = Jwts.parser()
+                            .setSigningKey(PUBLIC_KEY)
+                            .build();
+                }
+            }
+        }
+        return parser;
+    }
+
     @PostConstruct
     public void init() {
         PRIVATE_KEY= loadRsaPrivateKey();
         PUBLIC_KEY= loadRsaPublicKey();
+        getParser();
     }
 
     private PublicKey loadRsaPublicKey() {
@@ -136,11 +152,7 @@ public class JwtUtil {
         }
 
         try {
-            return Jwts.parser()
-                    .verifyWith(PUBLIC_KEY)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+            return getParser().parseSignedClaims(token).getPayload();
 
         } catch (ExpiredJwtException e) {
             log.info("Token has expired, userId from claims: {}", e.getClaims().get("userId"));

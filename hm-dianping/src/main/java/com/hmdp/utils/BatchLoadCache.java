@@ -61,12 +61,12 @@ public class BatchLoadCache {
         }
         //加载缓存逻辑
     }
-    public void saveFuture(Long futureId) {
-        if(usingUserIds.contains(futureId)) {
-            log.info("用户{}的缓存正在更新中，已存在任务中，无需重复添加", futureId);
+    public void saveFuture(Long userId) {
+        if(usingUserIds.contains(userId)) {
+            log.info("用户{}的缓存正在更新中，已存在任务中，无需重复添加", userId);
             return;
         }
-        writingUserIds.add(futureId);
+        writingUserIds.add(userId);
     }
     private void batchLoadCache(List<Long> userIds) {
         if (userIds == null || userIds.isEmpty()) {
@@ -90,7 +90,7 @@ public class BatchLoadCache {
             for (int i = 0; i < userIds.size(); i++) {
                 Long userId = userIds.get(i);
                 String redisKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
-                Map<byte[], byte[]> hashMap = (Map<byte[], byte[]>) redisCache.get(i);
+                Map<String,String> hashMap = (Map<String ,String>) redisCache.get(i);
 
                 if (hashMap != null && !hashMap.isEmpty()) {
                     // Redis命中，转换为UserinfoCache
@@ -103,7 +103,7 @@ public class BatchLoadCache {
             }
         }
         catch (Exception e) {
-
+        log.info("缓存更新失败{}",e.getMessage());
         }
         if(!needLoadFromMysqlToCache.isEmpty()) {
             batchLoadMysql(needLoadFromMysqlToCache);
@@ -111,12 +111,12 @@ public class BatchLoadCache {
         log.info("缓存更新完成");
     }
 
-    private UserinfoCache convertMapToUserinfoCache(Long userId, Map<byte[], byte[]> hashMap) {
+    private UserinfoCache convertMapToUserinfoCache(Long userId, Map<String,String > hashMap) {
         String nickName = "";
         String icon = "";
-        for (Map.Entry<byte[], byte[]> entry : hashMap.entrySet()) {
-            String key = new String(entry.getKey());
-            String value = new String(entry.getValue());
+        for (Map.Entry<String,String> entry : hashMap.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
             switch (key) {
                 case "nickName":
                     nickName = value;
@@ -202,7 +202,7 @@ public class BatchLoadCache {
                         // 执行hMSet
                         connection.hMSet(key.getBytes(), byteMap);
                         // 空值用户设置5分钟过期（短一点）
-                        connection.expire(key.getBytes(), 300); // 5分钟
+                        connection.expire(key.getBytes(), CaffeineConstants.USERINFO_CACHE_TTL_SECONDS); // 5分钟
                     }
                 }
                 return null;
