@@ -12,7 +12,7 @@ local tokenKey = KEYS[1]
 local versionKey = KEYS[2]
 local refreshKey = KEYS[3]
 local newVersionKey = KEYS[4]
-local userInfoKey =  KEY[5]
+local userInfoKey =  KEYS[5]
 local oldToken = ARGV[1]
 local newToken = ARGV[2]
 local tokenExpireSeconds = tonumber(ARGV[3])
@@ -23,7 +23,7 @@ local refreshExpireSeconds = tonumber(ARGV[7])
 local userinfoExpireSeconds = tonumber(ARGV[8])
 -- 1. 验证 refreshToken
 local storedRefresh = redis.call('GET', refreshKey)
-local exists = redis.call('exists', userInfoKey)
+local userInfoExists = redis.call('exists', userInfoKey)
 
 --if userInfo == '' then
 --    return 442  --USERINFO_CACHE_EMPTY
@@ -59,8 +59,12 @@ if storedToken ~= oldToken then
     return 402  -- TOKEN_MISMATCH
 end
 
-if ~exists then
+if userInfoExists == 0 then
     --用户信息未缓存，返回状态码继续查mysql拿用户信息
+    redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
+    redis.call('EXPIRE', newVersionKey, newVersionExpireSeconds)
+    redis.call('EXPIRE', refreshKey, refreshExpireSeconds)
+    redis.call('EXPIRE', versionKey, refreshExpireSeconds)
     return 441
 end
 -- 5. 更新 token
