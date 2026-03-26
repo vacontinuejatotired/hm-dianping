@@ -48,11 +48,17 @@ public class SnowflakeIdQueue {
      * @return
      * @throws InterruptedException
      */
-    public Long take() throws InterruptedException {
+    public Long take()  {
         if (checkRefresh()) {
             return -1L;
         }
-        Long id = BATCH_ID_QUEUE.take();
+        Long id = null;
+        try {
+            id = BATCH_ID_QUEUE.take();
+        } catch (InterruptedException e) {
+            System.out.println("从批次ID队列中获取ID时发生异常: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
         return id;
     }
 

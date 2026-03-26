@@ -7,4 +7,6 @@ public interface ITestService {
     Result restart(Long num,Long voucherId);
 
     Result generateTestToken(Long num,String fileName);
+
+    Result checkSnowFlake(int num);
 }

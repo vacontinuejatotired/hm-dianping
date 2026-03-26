@@ -9,18 +9,20 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 @Slf4j
 public class RedisIdWorker {
     private static final Long BEGIN_TIME = 1735689600L;
+
+    private static final Long BEGIN_TIME_MS= 1735689600000L;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
@@ -39,40 +41,63 @@ public class RedisIdWorker {
     /**
      * 根据订单Id使用情况动态获取新Id，避免一次性生成过多Id导致内存占用过高
      */
-    public void batchGenerateId() throws InterruptedException {
+    public void batchGenerateId() {
         log.info("准备批量生成ID");
-        int targetSize = SNOW_FLAKE_ID_QUEUE.getInitCapacity() - SNOW_FLAKE_ID_QUEUE.size();
-        stringRedisTemplate.executePipelined((RedisCallback<?>) (connection) -> {
-            for (int i = 0; i < targetSize; i++) {
-                LocalDateTime now = LocalDateTime.now();
-                Long timeStamp = now.toEpochSecond(ZoneOffset.UTC) - BEGIN_TIME;
-                Long incr = connection.incr(("icr:order:" + now.format(DateTimeFormatter.ofPattern("yyyy:MM:dd")).getBytes()).getBytes());
-                try {
-                    SNOW_FLAKE_ID_QUEUE.put(timeStamp << COUNT_BITS | incr);
-                } catch (InterruptedException e) {
-                    log.info("批量生成ID时线程被中断", e);
-                    throw new RuntimeException(e);
+
+        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy:MM:dd"));
+        String counterKey = "icr:order:" + today;
+        byte[] keyBytes = counterKey.getBytes(StandardCharsets.UTF_8);
+
+        int batchSize = 10000;
+
+        // 批量获取自增值
+        List<Object> results = stringRedisTemplate.executePipelined(
+                (RedisCallback<Long>) connection -> {
+                    for (int i = 0; i < batchSize; i++) {
+                        connection.incr(keyBytes);
+                    }
+                    return null;
                 }
+        );
+
+        // 生成 ID 并入队，每个 ID 使用独立的时间戳
+        for (Object obj : results) {
+            Long incr = (Long) obj;
+//            long timestamp = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC) - BEGIN_TIME;
+            long timestamp = System.currentTimeMillis() - BEGIN_TIME_MS;
+            long id = (timestamp << COUNT_BITS) | incr;
+            try {
+                SNOW_FLAKE_ID_QUEUE.put(id);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("批量生成ID时线程被中断", e);
             }
-            log.info("批量生成ID完成，当前队列大小: {}", SNOW_FLAKE_ID_QUEUE.size());
-            return null;
-        });
+        }
+
+        log.info("批量生成ID完成，当前队列大小: {}", SNOW_FLAKE_ID_QUEUE.size());
     }
 
-    public Long getIdFromQueue() throws InterruptedException {
+    public Long getIdFromQueue()  {
         Long id = SNOW_FLAKE_ID_QUEUE.take();
         if (id == -1L) {
             log.info("ID队列需要刷新，正在批量生成新ID...");
             try {
                 batchGenerateId();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
             } finally {
                 SNOW_FLAKE_ID_QUEUE.finishRefresh();
             }
             id = SNOW_FLAKE_ID_QUEUE.take();
         }
         return id;
+    }
+
+    public void showSnowflakeIdQueueInfo(int num) {
+        log.info("当前ID队列大小: {}", SNOW_FLAKE_ID_QUEUE.size());
+        log.info("当前ID队列是否正在刷新: {}", SNOW_FLAKE_ID_QUEUE.checkRefresh());
+        log.info("指定容量{}", SNOW_FLAKE_ID_QUEUE.getInitCapacity());
+        for(int i = 0; i < num; i++) {
+            log.info("获取ID: {}", getIdFromQueue());
+        }
     }
 
     public RedisIdWorker(StringRedisTemplate stringRedisTemplate) {
@@ -114,8 +139,6 @@ public class RedisIdWorker {
         if (count == 1) {
             stringRedisTemplate.expire(key, 8, TimeUnit.DAYS);
             log.debug("Set initial expire for new version key: {}", key);
-        } else {
-            log.debug("Version key already exists (value={}), expire will be handled in Lua", count);
         }
         return count;
     }

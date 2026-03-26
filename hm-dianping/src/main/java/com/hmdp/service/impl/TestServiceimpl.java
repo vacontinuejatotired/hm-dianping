@@ -5,6 +5,8 @@ import com.hmdp.service.ITestService;
 import com.hmdp.service.IUserService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisConstants;
+import com.hmdp.utils.RedisIdWorker;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -13,12 +15,16 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 
 @Service
+@Slf4j
 public class TestServiceimpl implements ITestService {
     @Resource
     private IVoucherOrderService voucherOrderService;
 
     @Resource
     private IUserService userService;
+
+    @Resource
+    private RedisIdWorker redisIdWorker;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -58,5 +64,12 @@ public class TestServiceimpl implements ITestService {
     public Result generateTestToken(Long num,String fileName) {
         userService.exportTokenAndRefreshTokenToCsv(Math.toIntExact(num),fileName);
         return Result.ok("success");
+    }
+
+    @Override
+    public Result checkSnowFlake(int num) {
+        redisIdWorker.showSnowflakeIdQueueInfo(num);
+        log.info("取出的ID数量: {}", num);
+        return Result.ok();
     }
 }

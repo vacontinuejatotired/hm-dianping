@@ -36,4 +36,12 @@ public class TestCostTimeController {
     public Result testRestart(@PathVariable Long num,@PathVariable Long voucherId) {
         return testService.restart(num,voucherId);
     }
+    @PostMapping("/generateToken/{num}")
+    public Result testGenerateTestToken(@PathVariable Long num,@RequestParam String fileName) {
+        return testService.generateTestToken(num,fileName);
+    }
+    @GetMapping("/checkSnowFlake/{num}")
+    public Result testCheckSnowFlake(@PathVariable int num) {
+        return testService.checkSnowFlake(num);
+    }
 }

@@ -1,10 +1,13 @@
 package com.hmdp.config;
 
+import com.hmdp.utils.LockFreeRedisScript;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+
+import java.io.IOException;
 
 @Configuration
 @Slf4j
@@ -14,10 +17,17 @@ public class RedisLuaConfig {
      * 通用Lua脚本创建方法
      */
     private <T> DefaultRedisScript<T> createScript(String path, Class<T> resultType) {
-        DefaultRedisScript<T> script = new DefaultRedisScript<>();
-        script.setLocation(new ClassPathResource(path));
-        script.setResultType(resultType);
-        log.info("Lua脚本 [{}] 创建成功, 返回类型: {}", path, resultType.getSimpleName());
+
+        ClassPathResource resource = new ClassPathResource(path);
+        String scriptContent = null;
+        try {
+            scriptContent = new String(resource.getInputStream().readAllBytes());
+        } catch (IOException e) {
+            log.error("加载Lua脚本 [{}] 失败: {}", path, e.getMessage());
+            throw new RuntimeException("加载Lua脚本失败", e);
+        }
+        LockFreeRedisScript script = new LockFreeRedisScript(scriptContent, resultType);
+        log.debug("脚本SHA1: {}", script.getSha1());
         return script;
     }
 
@@ -35,4 +45,5 @@ public class RedisLuaConfig {
     public DefaultRedisScript<Long> refreshTokenScript2() {
         return createScript("RefreshRefreshToken.lua", Long.class);
     }
+
 }
