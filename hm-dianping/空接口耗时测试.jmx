@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
   <hashTree>
-    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="抢劵测试">
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="空接口耗时测试">
+      <stringProp name="TestPlan.comments">测单机实际并发最大值</stringProp>
+      <boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
       <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="用户定义的变量">
         <collectionProp name="Arguments.arguments">
           <elementProp name="filePath" elementType="Argument">
             <stringProp name="Argument.name">filePath</stringProp>
-            <stringProp name="Argument.value">E:\hm-dianping\tokens_tokenAndRefreshToken.csv</stringProp>
+            <stringProp name="Argument.value">E:\hm-dianping\tokens_500tokenAndRefreshToken.csv</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
         </collectionProp>
@@ -24,7 +27,7 @@
         </elementProp>
       </SetupThreadGroup>
       <hashTree>
-        <BeanShellSampler guiclass="BeanShellSamplerGui" testclass="BeanShellSampler" testname="BeanShell 取样器" enabled="true">
+        <BeanShellSampler guiclass="BeanShellSamplerGui" testclass="BeanShellSampler" testname="BeanShell 取样器">
           <stringProp name="BeanShellSampler.query">// 初始化：读取CSV文件，创建Token Map
 import org.apache.commons.io.FileUtils;
 import java.io.File;
@@ -71,524 +74,10 @@ try {
         </BeanShellSampler>
         <hashTree/>
       </hashTree>
-      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="秒杀线程组" enabled="false">
-        <intProp name="ThreadGroup.num_threads">1000</intProp>
-        <intProp name="ThreadGroup.ramp_time">2</intProp>
-        <longProp name="ThreadGroup.duration">420</longProp>
-        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
-        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="循环控制器">
-          <intProp name="LoopController.loops">-1</intProp>
-          <boolProp name="LoopController.continue_forever">false</boolProp>
-        </elementProp>
-      </ThreadGroup>
-      <hashTree>
-        <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="CSV 数据文件设置" enabled="false">
-          <stringProp name="filename">E:/hm-dianping/hm-dianping/tokens_1000tokenAndRefreshToken.csv</stringProp>
-          <stringProp name="fileEncoding">UTF-8</stringProp>
-          <stringProp name="variableNames">token,refreshToken</stringProp>
-          <boolProp name="ignoreFirstLine">true</boolProp>
-          <stringProp name="delimiter">,</stringProp>
-          <boolProp name="quotedData">false</boolProp>
-          <boolProp name="recycle">true</boolProp>
-          <boolProp name="stopThread">false</boolProp>
-          <stringProp name="shareMode">shareMode.all</stringProp>
-          <stringProp name="TestPlan.comments">从csv文件中让每一个线程读取仅可读取一对可使用的token和refreshToken</stringProp>
-        </CSVDataSet>
-        <hashTree/>
-        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP信息头管理器" enabled="false">
-          <collectionProp name="HeaderManager.headers">
-            <elementProp name="" elementType="Header">
-              <stringProp name="Header.name">authorization</stringProp>
-              <stringProp name="Header.value">${token}</stringProp>
-            </elementProp>
-            <elementProp name="" elementType="Header">
-              <stringProp name="Header.name">Refresh-Token</stringProp>
-              <stringProp name="Header.value">${refreshToken}</stringProp>
-            </elementProp>
-          </collectionProp>
-          <stringProp name="TestPlan.comments">设置每一个请求中均携带两个token</stringProp>
-        </HeaderManager>
-        <hashTree/>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="高并发秒杀测试请求" enabled="true">
-          <stringProp name="HTTPSampler.domain">localhost</stringProp>
-          <stringProp name="HTTPSampler.port">8082</stringProp>
-          <stringProp name="HTTPSampler.path">/voucher-order/seckill/saveOrder/8</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
-          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量">
-            <collectionProp name="Arguments.arguments"/>
-          </elementProp>
-        </HTTPSamplerProxy>
-        <hashTree>
-          <BeanShellPreProcessor guiclass="TestBeanGUI" testclass="BeanShellPreProcessor" testname="BeanShell 预处理程序" enabled="true">
-            <stringProp name="filename"></stringProp>
-            <stringProp name="parameters"></stringProp>
-            <boolProp name="resetInterpreter">false</boolProp>
-            <stringProp name="script">// 预处理脚本 - 获取token并设置到请求头
-import org.apache.jmeter.protocol.http.control.Header;
-import org.apache.jmeter.protocol.http.control.HeaderManager;
-
-int threadNum = ctx.getThreadNum();
-HashMap map = (HashMap) props.get(&quot;tokenMap&quot;);
-
-if (map != null) {
-    Integer key = new Integer(threadNum);
-    String[] tokenPair = (String[]) map.get(key);
-    
-    if (tokenPair != null) {
-        String token = tokenPair[0];
-        String refreshToken = tokenPair[1];
-        
-        // 1. 设置到变量（供后续使用）
-        vars.put(&quot;token&quot;, token);
-        vars.put(&quot;refreshToken&quot;, refreshToken);
-        
-        // 2. 创建HeaderManager并添加两个Header
-        HeaderManager headerManager = new HeaderManager();
-        headerManager.add(new Header(&quot;Authorization&quot;, token));
-        headerManager.add(new Header(&quot;Refresh-Token&quot;, refreshToken));  // 添加Refresh Token
-        
-        // 3. 设置到请求
-        sampler.setHeaderManager(headerManager);
-        
-        log.info(&quot;线程&quot; + threadNum + &quot; 设置请求头:&quot;);
-        log.info(&quot;  Authorization: &quot; + token.substring(0, 20) + &quot;...&quot;);
-        log.info(&quot;  Refresh-Token: &quot; + refreshToken.substring(0, 20) + &quot;...&quot;);
-    }
-}</stringProp>
-          </BeanShellPreProcessor>
-          <hashTree/>
-          <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="查看结果树" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename">E:\hm-dianping\hm-dianping\jmeter\test.jtl</stringProp>
-          </ResultCollector>
-          <hashTree/>
-          <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="汇总报告" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename"></stringProp>
-          </ResultCollector>
-          <hashTree/>
-          <ResultCollector guiclass="StatVisualizer" testclass="ResultCollector" testname="聚合报告" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename">E:\hm-dianping\hm-dianping\jmeter\test.jtl</stringProp>
-          </ResultCollector>
-          <hashTree/>
-          <ResultCollector guiclass="RespTimeGraphVisualizer" testclass="ResultCollector" testname="响应时间图" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename"></stringProp>
-            <stringProp name="RespTimeGraph.interval">1000</stringProp>
-            <stringProp name="RespTimeGraph.graphtitle">响应时间变化趋势</stringProp>
-            <intProp name="RespTimeGraph.linestrockwidth">2</intProp>
-            <intProp name="RespTimeGraph.graphtitlefondsize">5</intProp>
-          </ResultCollector>
-          <hashTree/>
-          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.TransactionsPerSecondGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Transactions per Second" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename"></stringProp>
-            <longProp name="interval_grouping">1000</longProp>
-            <boolProp name="graph_aggregated">false</boolProp>
-            <stringProp name="include_sample_labels"></stringProp>
-            <stringProp name="exclude_sample_labels"></stringProp>
-            <stringProp name="start_offset"></stringProp>
-            <stringProp name="end_offset"></stringProp>
-            <boolProp name="include_checkbox_state">false</boolProp>
-            <boolProp name="exclude_checkbox_state">false</boolProp>
-          </kg.apc.jmeter.vizualizers.CorrectedResultCollector>
-          <hashTree/>
-          <BeanShellPostProcessor guiclass="TestBeanGUI" testclass="BeanShellPostProcessor" testname="BeanShell 后置处理程序" enabled="true">
-            <boolProp name="resetInterpreter">false</boolProp>
-            <stringProp name="parameters"></stringProp>
-            <stringProp name="filename"></stringProp>
-            <stringProp name="script">// 每个请求后：检查是否有新token，有则更新
-int threadNum = ctx.getThreadNum();
-int iteration = vars.getIteration();
-
-// 获取响应码和响应头
-String responseCode = prev.getResponseCode();
-String headers = prev.getResponseHeaders();
-
-// ===== 新增：检查请求是否成功 =====
-boolean isSuccess = false;
-try {
-    int code = Integer.parseInt(responseCode);
-    isSuccess = (code &gt;= 200 &amp;&amp; code &lt; 300); // 2xx 都算成功
-} catch (Exception e) {
-    log.error(&quot;解析响应码失败: &quot; + responseCode);
-    isSuccess = false;
-}
-
-// 从响应头中查找新token
-String newToken = null;
-
-// 查找 Authorization: xxx
-int authIndex = headers.indexOf(&quot;Authorization:&quot;);
-if (authIndex &gt;= 0) {
-    int start = authIndex + 13; // &quot;Authorization:&quot;的长度
-    int end = headers.indexOf(&quot;\n&quot;, start);
-    if (end &lt; 0) end = headers.length();
-    newToken = headers.substring(start, end).trim();
-}
-
-// 查找 Refresh-Token: xxx
-String newRefreshToken = null;
-int refreshIndex = headers.indexOf(&quot;Refresh-Token:&quot;);
-if (refreshIndex &gt;= 0) {
-    int start = refreshIndex + 14; // &quot;Refresh-Token:&quot;的长度
-    int end = headers.indexOf(&quot;\n&quot;, start);
-    if (end &lt; 0) end = headers.length();
-    newRefreshToken = headers.substring(start, end).trim();
-}
-
-// 获取旧的token值
-String oldToken = vars.get(&quot;token&quot;);
-String oldRefreshToken = vars.get(&quot;refreshToken&quot;);
-
-// ===== 新增：请求失败的处理逻辑 =====
-if (!isSuccess) {
-    log.warn(&quot;线程&quot; + threadNum + &quot; 第&quot; + iteration + &quot;次迭代 请求失败，响应码: &quot; + responseCode);
-    
-    try {
-        // 获取Map
-        HashMap map = (HashMap) props.get(&quot;tokenMap&quot;);
-        if (map != null) {
-            Integer key = new Integer(threadNum);
-            
-            // 检查Map中当前是什么
-            String[] currentPair = (String[]) map.get(key);
-            
-            // 如果Map中的token和当前使用的token不一样，说明被其他逻辑改过了？
-            if (currentPair != null) {
-                String currentToken = currentPair[0];
-                String currentRefreshToken = currentPair[1];
-                
-                // 比较Map中的token和当前使用的token
-                if (!currentToken.equals(oldToken)) {
-                    log.warn(&quot;  警告: Map中的token和当前使用的token不一致&quot;);
-                    log.warn(&quot;    Map中的token: &quot; + currentToken.substring(0, 20) + &quot;...&quot;);
-                    log.warn(&quot;    当前使用的token: &quot; + oldToken.substring(0, 20) + &quot;...&quot;);
-                }
-            }
-            
-            // 重新把原来的token塞回Map（确保Map中的token是正确的）
-            String[] restorePair = new String[2];
-            restorePair[0] = oldToken;
-            restorePair[1] = oldRefreshToken;
-            map.put(key, restorePair);
-            
-            // 同时确保JMeter变量也是正确的
-            vars.put(&quot;token&quot;, oldToken);
-            vars.put(&quot;refreshToken&quot;, oldRefreshToken);
-            
-            log.info(&quot;  已恢复原有token: &quot; + oldToken.substring(0, 20) + &quot;...&quot;);
-        }
-    } catch (Exception e) {
-        log.error(&quot;恢复token失败: &quot; + e.toString());
-    }
-    
-    return; // 请求失败，直接返回，不继续处理token更新
-}
-
-// 如果找到新token
-if (newToken != null || newRefreshToken != null) {
-    // 确定最终要用的值
-    String finalToken = newToken;
-    if (finalToken == null) finalToken = oldToken;
-    
-    String finalRefreshToken = newRefreshToken;
-    if (finalRefreshToken == null) finalRefreshToken = oldRefreshToken;
-    
-    // 1. 更新JMeter变量
-    vars.put(&quot;token&quot;, finalToken);
-    vars.put(&quot;refreshToken&quot;, finalRefreshToken);
-    
-    // 2. 更新Map中的token
-    try {
-        HashMap map = (HashMap) props.get(&quot;tokenMap&quot;);
-        if (map != null) {
-            Integer key = new Integer(threadNum);
-            
-            // 创建新的token对
-            String[] newPair = new String[2];
-            newPair[0] = finalToken;
-            newPair[1] = finalRefreshToken;
-            
-            // 替换
-            map.put(key, newPair);
-            
-            log.info(&quot;线程&quot; + threadNum + &quot; 第&quot; + iteration + &quot;次迭代 Token已更新&quot;);
-            log.info(&quot;  旧Token: &quot; + oldToken.substring(0, 20) + &quot;...&quot;);
-            log.info(&quot;  新Token: &quot; + finalToken.substring(0, 20) + &quot;...&quot;);
-        }
-    } catch (Exception e) {
-        log.error(&quot;更新Map失败: &quot; + e.toString());
-    }
-} else {
-    // 每10次迭代打印一次未更新日志
-    if (iteration % 10 == 0) {
-        log.info(&quot;线程&quot; + threadNum + &quot; 第&quot; + iteration + &quot;次迭代 无新token&quot;);
-    }
-}</stringProp>
-          </BeanShellPostProcessor>
-          <hashTree/>
-          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.ThreadsStateOverTimeGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Active Threads Over Time" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename"></stringProp>
-            <longProp name="interval_grouping">500</longProp>
-            <boolProp name="graph_aggregated">false</boolProp>
-            <stringProp name="include_sample_labels"></stringProp>
-            <stringProp name="exclude_sample_labels"></stringProp>
-            <stringProp name="start_offset"></stringProp>
-            <stringProp name="end_offset"></stringProp>
-            <boolProp name="include_checkbox_state">false</boolProp>
-            <boolProp name="exclude_checkbox_state">false</boolProp>
-          </kg.apc.jmeter.vizualizers.CorrectedResultCollector>
-          <hashTree/>
-          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.ResponseTimesOverTimeGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Response Times Over Time" enabled="true">
-            <boolProp name="ResultCollector.error_logging">false</boolProp>
-            <objProp>
-              <name>saveConfig</name>
-              <value class="SampleSaveConfiguration">
-                <time>true</time>
-                <latency>true</latency>
-                <timestamp>true</timestamp>
-                <success>true</success>
-                <label>true</label>
-                <code>true</code>
-                <message>true</message>
-                <threadName>true</threadName>
-                <dataType>true</dataType>
-                <encoding>false</encoding>
-                <assertions>true</assertions>
-                <subresults>true</subresults>
-                <responseData>false</responseData>
-                <samplerData>false</samplerData>
-                <xml>false</xml>
-                <fieldNames>true</fieldNames>
-                <responseHeaders>false</responseHeaders>
-                <requestHeaders>false</requestHeaders>
-                <responseDataOnError>false</responseDataOnError>
-                <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
-                <assertionsResultsToSave>0</assertionsResultsToSave>
-                <bytes>true</bytes>
-                <sentBytes>true</sentBytes>
-                <url>true</url>
-                <threadCounts>true</threadCounts>
-                <idleTime>true</idleTime>
-                <connectTime>true</connectTime>
-              </value>
-            </objProp>
-            <stringProp name="filename"></stringProp>
-            <longProp name="interval_grouping">500</longProp>
-            <boolProp name="graph_aggregated">false</boolProp>
-            <stringProp name="include_sample_labels"></stringProp>
-            <stringProp name="exclude_sample_labels"></stringProp>
-            <stringProp name="start_offset"></stringProp>
-            <stringProp name="end_offset"></stringProp>
-            <boolProp name="include_checkbox_state">false</boolProp>
-            <boolProp name="exclude_checkbox_state">false</boolProp>
-          </kg.apc.jmeter.vizualizers.CorrectedResultCollector>
-          <hashTree/>
-        </hashTree>
-      </hashTree>
-      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="空接口线程组">
-        <intProp name="ThreadGroup.num_threads">1000</intProp>
-        <intProp name="ThreadGroup.ramp_time">5</intProp>
-        <longProp name="ThreadGroup.duration">200</longProp>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="线程组">
+        <intProp name="ThreadGroup.num_threads">500</intProp>
+        <intProp name="ThreadGroup.ramp_time">10</intProp>
+        <longProp name="ThreadGroup.duration">300</longProp>
         <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <boolProp name="ThreadGroup.scheduler">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
@@ -625,12 +114,12 @@ if (newToken != null || newRefreshToken != null) {
           <stringProp name="TestPlan.comments">设置每一个请求中均携带两个token</stringProp>
         </HeaderManager>
         <hashTree/>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="高并发秒杀测试请求">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="空接口测试请求">
           <stringProp name="HTTPSampler.domain">localhost</stringProp>
           <stringProp name="HTTPSampler.port">8082</stringProp>
-          <stringProp name="HTTPSampler.path">/voucher-order/seckill/saveOrder/8</stringProp>
+          <stringProp name="HTTPSampler.path">/test/void</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量">
@@ -676,7 +165,7 @@ if (map != null) {
 }</stringProp>
           </BeanShellPreProcessor>
           <hashTree/>
-          <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="查看结果树">
+          <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="查看结果树" enabled="false">
             <boolProp name="ResultCollector.error_logging">false</boolProp>
             <objProp>
               <name>saveConfig</name>
@@ -787,7 +276,7 @@ if (map != null) {
             <stringProp name="filename">E:\hm-dianping\hm-dianping\jmeter\test.jtl</stringProp>
           </ResultCollector>
           <hashTree/>
-          <ResultCollector guiclass="RespTimeGraphVisualizer" testclass="ResultCollector" testname="响应时间图">
+          <ResultCollector guiclass="RespTimeGraphVisualizer" testclass="ResultCollector" testname="响应时间图" enabled="false">
             <boolProp name="ResultCollector.error_logging">false</boolProp>
             <objProp>
               <name>saveConfig</name>
@@ -873,7 +362,7 @@ if (map != null) {
             <boolProp name="exclude_checkbox_state">false</boolProp>
           </kg.apc.jmeter.vizualizers.CorrectedResultCollector>
           <hashTree/>
-          <BeanShellPostProcessor guiclass="TestBeanGUI" testclass="BeanShellPostProcessor" testname="BeanShell 后置处理程序" enabled="false">
+          <BeanShellPostProcessor guiclass="TestBeanGUI" testclass="BeanShellPostProcessor" testname="BeanShell 后置处理程序">
             <boolProp name="resetInterpreter">false</boolProp>
             <stringProp name="parameters"></stringProp>
             <stringProp name="filename"></stringProp>
@@ -1008,7 +497,7 @@ if (newToken != null || newRefreshToken != null) {
 }</stringProp>
           </BeanShellPostProcessor>
           <hashTree/>
-          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.ThreadsStateOverTimeGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Active Threads Over Time">
+          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.ThreadsStateOverTimeGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Active Threads Over Time" enabled="false">
             <boolProp name="ResultCollector.error_logging">false</boolProp>
             <objProp>
               <name>saveConfig</name>
@@ -1053,7 +542,7 @@ if (newToken != null || newRefreshToken != null) {
             <boolProp name="exclude_checkbox_state">false</boolProp>
           </kg.apc.jmeter.vizualizers.CorrectedResultCollector>
           <hashTree/>
-          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.ResponseTimesOverTimeGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Response Times Over Time" enabled="true">
+          <kg.apc.jmeter.vizualizers.CorrectedResultCollector guiclass="kg.apc.jmeter.vizualizers.ResponseTimesOverTimeGui" testclass="kg.apc.jmeter.vizualizers.CorrectedResultCollector" testname="jp@gc - Response Times Over Time" enabled="false">
             <boolProp name="ResultCollector.error_logging">false</boolProp>
             <objProp>
               <name>saveConfig</name>
@@ -1100,10 +589,9 @@ if (newToken != null || newRefreshToken != null) {
           <hashTree/>
         </hashTree>
       </hashTree>
-      <PostThreadGroup guiclass="PostThreadGroupGui" testclass="PostThreadGroup" testname="tearDown 线程组" enabled="false">
+      <PostThreadGroup guiclass="PostThreadGroupGui" testclass="PostThreadGroup" testname="tearDown 线程组">
         <intProp name="ThreadGroup.num_threads">1</intProp>
         <intProp name="ThreadGroup.ramp_time">1</intProp>
-        <longProp name="ThreadGroup.duration">300</longProp>
         <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="循环控制器">

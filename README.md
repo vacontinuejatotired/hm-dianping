@@ -8,157 +8,42 @@
 - **订单/库存扣减模块**：Redis 预减 + Lua 原子操作 + RabbitMQ 异步落库，支撑高并发场景下的库存准确性。
 - **性能优化**：通过压测数据验证优化效果，吞吐量与数据库压力显著改善。
 
-## 核心功能与技术实现
+## 主要优化点
 
-### 1. 用户认证与双令牌刷新机制
+本项目在黑马点评基础项目上进行了深度优化，主要聚焦高并发场景下的性能、安全与一致性。以下是关键优化内容：
 
-- Access Token 有效期 30 分钟 + Refresh Token 有效期 7 天，支持自动续期。
-- 实现单设备登录：以 userId 为键在 Redis 存储当前有效 Access Token，新登录自动使旧 Token 失效。
-- Refresh Token 采用**旋转 + 一次性使用**策略，有效防止重放攻击。
-- 额外引入**版本号机制**，限制有效 Refresh Token 与任意过期 Access Token 的非法组合使用。
-- 刷新流程使用 **Redis + Lua 脚本** 原子执行：检查 key 存在 → 值比对 → 删除旧令牌 → 写入新令牌，避免并发条件下的 Token 覆盖。
-- 用户信息缓存于 Redis Hash，显著降低数据库认证压力。
-附带login方法流程
-```mermaid
-flowchart TD
-    A[登录请求] --> B[校验手机号]
-    B -->|失败| Z[返回错误]
-    
-    B -->|成功| C[校验验证码]
-    C -->|失败| Z
-    
-    C -->|成功| D{用户是否存在？}
-    D -->|否| E[创建新用户]
-    E --> F
-    D -->|是| F[生成新version<br>（redisIdWorker.nextVersion）]
-    
-    F --> G[生成accessToken<br>（含userId+version）]
-    G --> H[生成refreshToken<br>（UUID随机）]
-    
-    H --> I[执行Lua脚本<br>原子化写入Redis]
-    I --> J{写入成功？}
-    J -->|否| Z
-    
-    J -->|是| K[返回token+refreshToken]
-    K --> Z
-```
-Refresh拦截器拦截流程
-```mermaid
-flowchart TD
-  A[收到请求] --> B{URI公开？}
-B -->|是| Z[放行] --> END
+### 1. 用户认证与安全优化
+- **双令牌机制重构**：原单Token改为Access Token + Refresh Token，增强安全性。
+- **单设备登录限制**：Redis存储用户当前有效Token，新登录自动失效旧Token，防止多设备并发登录问题。
+- **Refresh Token旋转策略**：每次刷新生成新Refresh Token，旧Token一次性使用，防止重放攻击。
+- **版本号机制**：引入version字段，严格校验Token组合的有效性，避免过期Token滥用。
+- **原子化刷新流程**：使用Redis + Lua脚本保证Token刷新原子性，解决并发覆盖问题。
+- **用户信息缓存优化**：Redis Hash缓存用户数据，减少数据库查询压力，支持异步批量加载。
 
-B -->|否| C[取Authorization头 & Refresh-Token头]
-C --> D{Token存在？}
-D -->|否| E[401 Unauthorized<br/>token is null] --> END
+[查看登录流程](login-process-flow.md)  
+[查看Refresh拦截器拦截流程](refresh-token-interceptor-flow.md)  
+[查看刷新过期token流程](refresh-expired-token-flow.md)
 
-D -->|是| F{Refresh-Token存在？}
-F -->|否| E2[401 Unauthorized<br/>Refresh-Token is null] --> END
+### 2. 高并发库存扣减优化
+- **Redis预减库存**：下单时先在Redis扣减库存，快速响应用户请求。
+- **Lua脚本原子操作**：单脚本内完成库存检查、扣减与重复下单校验，确保一致性。
+- **异步消息落库**：RabbitMQ异步投递扣减消息，解耦业务逻辑与数据库操作。
+- **消息可靠投递**：Confirm + Return机制保证消息不丢失，支持幂等消费防止重复扣减。
+- **性能提升**：压测显示库存扣减接口TP99响应时间下降约55%，显著改善高并发下的性能。
 
-F -->|是| G[解析JWT Token]
-G --> H{解析结果}
+### 3. 缓存与异步优化
+- **多级缓存架构**：本地缓存 → Redis → 数据库，逐级降级减少网络开销。
+- **异步用户信息加载**：Token刷新时异步加载缓存，避免同步阻塞。
+- **批量缓存更新**：定时任务批量刷新缓存，确保数据一致性与时效性。
+- **点赞异步处理**：Redis缓存点赞数据，定时批量写入数据库，减少实时DB压力。
 
-H -->|过期异常<br/>ExpiredJwtException| I[捕获过期Claims<br/>验证用户信息]
-I --> J{验证成功？}
-J -->|否| E
-J -->|是| K[调用handleExpiredToken<br/>处理过期Token续期]
-K --> L{处理结果}
-L -->|401| E
-L -->|406| M[406 Not Acceptable<br/>token无法更新] --> END
-L -->|成功| N[设置响应头<br/>新Token & Refresh-Token] --> Z
+### 4. 整体性能与稳定性提升
+- **并发一致性保证**：通过分布式锁、Lua原子脚本等手段解决高并发数据竞争。
+- **数据库压力缓解**：缓存预加载 + 异步处理大幅降低DB查询频率。
+- **压测验证**：使用JMeter进行高并发测试，量化优化效果，确保生产环境稳定性。
 
-H -->|其他异常<br/>JWT解析失败| E
+这些优化基于实际业务场景，通过技术手段显著提升了系统的并发处理能力、安全性与用户体验。
 
-H -->|成功| O[验证Claims并加载用户]
-O --> P{验证成功？}
-P -->|否| E
-
-P -->|是| Q[获取Token剩余有效时间]
-Q --> R{剩余时间 < 10分钟？}
-R -->|否| S[Token仍有效<br/>正常处理] --> Z
-
-R -->|是| T[生成新AccessToken<br/>version不变]
-T --> U[构建Lua脚本参数<br/>- 新旧Token<br/>- version版本<br/>- 过期时间<br/>- 用户信息缓存]
-U --> V[执行Lua脚本<br/>原子更新Redis]
-V --> W{执行结果判断}
-
-W -->|SUCCESS| X[设置新Token到响应头<br/>authorization: newToken]
-W -->|USERINFO_NOT_FOUND| Y[异步加载用户信息<br/>batchLoadCache.saveFuture]
-W -->|其他失败码| E
-
-Y --> X
-X --> Z
-
-END([结束])
-
-style A fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style Z fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-style E fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#000
-style E2 fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#000
-style M fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
-style END fill:#f5f5f5,stroke:#9e9e9e,stroke-width:2px,color:#000
-```
-刷新过期token流程
-```mermaid
-flowchart TD
-  A[收到过期异常] --> B[从过期token提取<br>userId + version]
-  B --> C{提取成功？}
-C -->|否| D[401 Unauthorized] --> END[结束]
-
-C -->|是| E[取Refresh-Token头]
-E --> F{RefreshToken存在？}
-F -->|否| D
-
-F -->|是| G[生成新version<br>redisIdWorker.nextVersion]
-G --> H[生成新accessToken<br>含新version]
-H --> I[生成新refreshToken<br>UUID随机]
-
-I --> J[构建Lua脚本参数<br>- 旧RefreshToken<br>- 新RefreshToken<br>- RefreshToken过期时间7天<br>- 新AccessToken<br>- AccessToken过期时间<br>- 旧version<br>- RefreshToken TTL<br>- 新version<br>- 新version TTL]
-
-J --> K[执行Lua脚本<br>原子化校验+更新]
-K --> L{Lua返回码}
-
-L -->|SUCCESS 1| M[刷新成功]
-L -->|其他失败码| N[失败 → 401 Unauthorized] --> END
-
-M --> O[设置新AccessToken到响应头<br>authorization]
-O --> P[设置新RefreshToken到响应头<br>Refresh-Token]
-P --> END
-
-style A fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style B fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style C fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000
-style D fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#000
-style E fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style F fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000
-style G fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style H fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style I fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-style J fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000
-style K fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000
-style L fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000
-style M fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-style N fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#000
-style O fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-style P fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-style END fill:#f5f5f5,stroke:#9e9e9e,stroke-width:2px,color:#000
-```
-### 2. 高并发异步库存扣减
-
-- Redis 预减库存 + Lua 脚本原子完成检查、扣减、重复下单校验（单脚本内处理）。
-- 下单成功后通过 RabbitMQ 异步投递扣减消息。
-- 消息可靠投递采用 Confirm + Return 机制，保证最终一致性与防丢失/重复扣减。
-- 压测结果：
-  - 库存扣减接口 TP99 下降约 55%。
-### 3. 点赞功能异步优化（简要）
-
-- 点赞操作先写 Redis（Hash + ZSet），定时任务批量落库。
-- Lua 脚本保证原子性，防止重复点赞覆盖。
-### 4.用户缓存消息加载优化
-- 添加多级缓存设计，优先从本地缓存获取用户信息，减少对Redis的访问频率。
-- 刷新Token时若用户信息未命中，异步加载用户信息到缓存，避免同步加载导致的性能问题。
-- 获取本地缓存未命中时，逐级尝试从Redis获取用户信息，最后才访问数据库，降低数据库压力。
-- 定时任务批量加载用户信息，确保缓存的及时更新与一致性。
 ## 技术栈
 
 - 后端：Spring Boot、MyBatis
