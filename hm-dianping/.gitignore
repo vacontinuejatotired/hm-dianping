@@ -38,8 +38,13 @@ build/
 *.pem
 *.key
 private*
+
+#日志文件，测试token文件
+**/*.log
+**/*.csv
 /hs_err_pid39372.log
 *.log
 *.csv
 *.jar
 *.jti
+*sping.xml
