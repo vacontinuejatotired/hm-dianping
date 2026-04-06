@@ -26,7 +26,7 @@ public enum TokenRefreshCode {
     // RefreshToken相关错误 (42x)
     REFRESH_TOKEN_NOT_FOUND(421L, "RefreshToken不存在"),
     REFRESH_TOKEN_MISMATCH(422L, "RefreshToken不匹配"),
-
+    //userInfo
     // 版本相关错误新增 (413)
     /**
      * 版本号存在但比登录时间早，token不可使用
@@ -39,7 +39,14 @@ public enum TokenRefreshCode {
      * 原始版本号为null
      * 对应Lua: if not orginVersion then return 0
      */
-    ORIGIN_VERSION_NULL(431L, "原始版本号不存在");
+    ORIGIN_VERSION_NULL(431L, "原始版本号不存在"),
+    /**
+     * 44x
+     * userInfo 相关错误
+     */
+    USEINFO_NOT_FOUND (441L,"userInfo不存在"),
+    USERINFO_CACHE_EMPTY (442L,"用户信息缓存空值");
+
 
     private final Long code;  // Long 类型
     private final String message;

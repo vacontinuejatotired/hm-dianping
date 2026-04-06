@@ -1,12 +1,14 @@
 package com.hmdp.utils;
 
 import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 
 import javax.annotation.PostConstruct;
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
@@ -24,7 +26,8 @@ public class JwtUtil {
 
     private static PrivateKey PRIVATE_KEY;
     private static PublicKey PUBLIC_KEY;
-
+    private static final String SECRET_KEY_STRING = "my-test-secret-key-for-hs256-must-be-at-least-32-bytes";
+    private static SecretKey SECRET_KEY;
     private final ResourceLoader resourceLoader;
 
     public JwtUtil(ResourceLoader resourceLoader) {
@@ -32,13 +35,25 @@ public class JwtUtil {
     }
 
     private static volatile JwtParser parser;
+    private static SecretKey getSecretKey() {
+        if (SECRET_KEY == null) {
+            synchronized (JwtUtil.class) {
+                if (SECRET_KEY == null) {
+                    SECRET_KEY= Keys.hmacShaKeyFor(
+                            SECRET_KEY_STRING.getBytes(StandardCharsets.UTF_8)
+                    );
+                }
+            }
+        }
+        return SECRET_KEY;
+    }
 
     private static JwtParser getParser() {
         if (parser == null) {
             synchronized (JwtUtil.class) {
                 if (parser == null) {
                     parser = Jwts.parser()
-                            .setSigningKey(PUBLIC_KEY)
+                            .setSigningKey(getSecretKey())
                             .build();
                 }
             }
@@ -46,77 +61,98 @@ public class JwtUtil {
         return parser;
     }
 
+//    @PostConstruct
+//    public void init() {
+//        PRIVATE_KEY= loadRsaPrivateKey();
+//        PUBLIC_KEY= loadRsaPublicKey();
+//        getParser();
+//    }
     @PostConstruct
     public void init() {
-        PRIVATE_KEY= loadRsaPrivateKey();
-        PUBLIC_KEY= loadRsaPublicKey();
-        getParser();
-    }
-
-    private PublicKey loadRsaPublicKey() {
         try {
-            // 从 classpath 读取 public.pem（路径：src/main/resources/public.pem）
-            Resource resource = new ClassPathResource("public.pem");
-            if (!resource.exists()) {
-                throw new IllegalStateException("public.pem not found in classpath");
-            }
-
-            // 读取文件内容为字符串
-            String pem = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
-            // 清理 PEM 格式
-            String publicKeyContent = pem
-                    .replace("-----BEGIN PUBLIC KEY-----", "")
-                    .replace("-----END PUBLIC KEY-----", "")
-                    .replaceAll("\\s+", "");  // 移除所有换行、空格等
-            System.out.println(publicKeyContent);
-            byte[] keyBytes = Base64.getDecoder().decode(publicKeyContent);
-
-            X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
-            KeyFactory kf = KeyFactory.getInstance("RSA");
-            return kf.generatePublic(spec);
+            // 选择一种方式：
+            // 方式1：从字符串生成
+            SECRET_KEY = Keys.hmacShaKeyFor(SECRET_KEY_STRING.getBytes(StandardCharsets.UTF_8));
+            // 方式2：从Base64生成
+            // SECRET_KEY = Keys.hmacShaKeyFor(Base64.getDecoder().decode(SECRET_KEY_BASE64));
+            // 方式3：从字节数组生成
+            // SECRET_KEY = Keys.hmacShaKeyFor(SECRET_KEY_BYTES);
+            // 预创建parser
+            getParser();
+            log.info("===== JWT HS256密钥初始化完成 =====");
+            log.info("密钥算法: {}", SECRET_KEY.getAlgorithm());
+            log.info("密钥长度: {} 位", SECRET_KEY.getEncoded().length * 8);
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to load RSA public key from classpath", e);
+            log.error("JWT密钥初始化失败", e);
+            throw new RuntimeException("JWT密钥初始化失败", e);
         }
     }
 
-    private PrivateKey loadRsaPrivateKey() {
-        try {
-            Resource resource = new ClassPathResource("private-pkcs8.pem");
-            if (!resource.exists()) {
-                throw new IllegalStateException("private-pkcs8.pem not found in classpath");
-            }
-
-            String pem = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
-            // 针对您的实际头尾格式（无空格） + 兼容标准格式
-            String privateKeyContent = pem
-                    // 匹配无空格的变体（最常见问题）
-                    .replace("-----BEGINRSAPRIVATEKEY-----", "")
-                    .replace("-----ENDRSAPRIVATEKEY-----", "")
-                    // 兼容标准格式（有空格）
-                    .replaceAll("-----BEGIN\\s+RSA\\s+PRIVATE\\s+KEY-----", "")
-                    .replaceAll("-----END\\s+RSA\\s+PRIVATE\\s+KEY-----", "")
-                    .replaceAll("-----BEGIN\\s+PRIVATE\\s+KEY-----", "")
-                    .replaceAll("-----END\\s+PRIVATE\\s+KEY-----", "")
-                    // 最终移除所有剩余空白字符（换行、空格、制表符）
-                    .replaceAll("\\s+", "");
-
-            // 调试输出：确认清理后是否为纯 Base64
-            System.out.println("清理后的 Base64 字符串长度: " + privateKeyContent.length());
-            System.out.println("清理后的 Base64 前 50 字符: " + privateKeyContent.substring(0, Math.min(50, privateKeyContent.length())));
-
-            byte[] keyBytes = Base64.getDecoder().decode(privateKeyContent);
-
-            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
-            KeyFactory kf = KeyFactory.getInstance("RSA");
-            return kf.generatePrivate(spec);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load RSA private key from classpath", e);
-        }
-    }
+//    private PublicKey loadRsaPublicKey() {
+//        try {
+//            // 从 classpath 读取 public.pem（路径：src/main/resources/public.pem）
+//            Resource resource = new ClassPathResource("public.pem");
+//            if (!resource.exists()) {
+//                throw new IllegalStateException("public.pem not found in classpath");
+//            }
+//
+//            // 读取文件内容为字符串
+//            String pem = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+//
+//            // 清理 PEM 格式
+//            String publicKeyContent = pem
+//                    .replace("-----BEGIN PUBLIC KEY-----", "")
+//                    .replace("-----END PUBLIC KEY-----", "")
+//                    .replaceAll("\\s+", "");  // 移除所有换行、空格等
+//            System.out.println(publicKeyContent);
+//            byte[] keyBytes = Base64.getDecoder().decode(publicKeyContent);
+//
+//            X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+//            KeyFactory kf = KeyFactory.getInstance("RSA");
+//            return kf.generatePublic(spec);
+//
+//        } catch (Exception e) {
+//            throw new RuntimeException("Failed to load RSA public key from classpath", e);
+//        }
+//    }
+//
+//    private PrivateKey loadRsaPrivateKey() {
+//        try {
+//            Resource resource = new ClassPathResource("private-pkcs8.pem");
+//            if (!resource.exists()) {
+//                throw new IllegalStateException("private-pkcs8.pem not found in classpath");
+//            }
+//
+//            String pem = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+//
+//            // 针对您的实际头尾格式（无空格） + 兼容标准格式
+//            String privateKeyContent = pem
+//                    // 匹配无空格的变体（最常见问题）
+//                    .replace("-----BEGINRSAPRIVATEKEY-----", "")
+//                    .replace("-----ENDRSAPRIVATEKEY-----", "")
+//                    // 兼容标准格式（有空格）
+//                    .replaceAll("-----BEGIN\\s+RSA\\s+PRIVATE\\s+KEY-----", "")
+//                    .replaceAll("-----END\\s+RSA\\s+PRIVATE\\s+KEY-----", "")
+//                    .replaceAll("-----BEGIN\\s+PRIVATE\\s+KEY-----", "")
+//                    .replaceAll("-----END\\s+PRIVATE\\s+KEY-----", "")
+//                    // 最终移除所有剩余空白字符（换行、空格、制表符）
+//                    .replaceAll("\\s+", "");
+//
+//            // 调试输出：确认清理后是否为纯 Base64
+//            System.out.println("清理后的 Base64 字符串长度: " + privateKeyContent.length());
+//            System.out.println("清理后的 Base64 前 50 字符: " + privateKeyContent.substring(0, Math.min(50, privateKeyContent.length())));
+//
+//            byte[] keyBytes = Base64.getDecoder().decode(privateKeyContent);
+//
+//            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
+//            KeyFactory kf = KeyFactory.getInstance("RSA");
+//            return kf.generatePrivate(spec);
+//
+//        } catch (Exception e) {
+//            throw new RuntimeException("Failed to load RSA private key from classpath", e);
+//        }
+//    }
     public String generateToken(Long userId,Long timeExpired,TemporalUnit temporalUnit) {
         return generateToken(userId,timeExpired,temporalUnit,null);
     }
@@ -134,17 +170,17 @@ public class JwtUtil {
                 .claims(claims)
                 .expiration(Date.from(exp))
                 .issuedAt(Date.from(now))
-                .signWith(SignatureAlgorithm.RS256, PRIVATE_KEY)
+                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
                 // RS256 = SHA256withRSA
                 .compact();
     }
 
     public Claims valiateAndGetClaimFromToken(String token) throws JwtException {
 
-        if (PUBLIC_KEY == null) {
-            log.error("Public key is null - cannot verify JWT signature");
-            throw new IllegalStateException("Public key not initialized");
-        }
+//        if (PUBLIC_KEY == null) {
+//            log.error("Public key is null - cannot verify JWT signature");
+//            throw new IllegalStateException("Public key not initialized");
+//        }
 
         if (token == null || token.trim().isEmpty()) {
             log.warn("Token is null or empty");

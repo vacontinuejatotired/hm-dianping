@@ -19,4 +19,8 @@ public interface IVoucherOrderService extends IService<VoucherOrder> {
     void createVoucherOrder(VoucherOrder voucherId);
 
     Result saveOrder(Long voucherId);
+
+    void deleteVoucherOrders(Long voucherId,Long stock);
+
+    void sendMqMessage(VoucherOrder voucherOrder);
 }

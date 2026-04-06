@@ -215,11 +215,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return String.format("137%08d", index);
     }
 
-    /**
+
+
+     /**
      * 用于测试的批量生成两种token方法
      * @param size
      */
-    private void generateTestTokenAndRefreshToken(int size) {
+
+    public void generateTestTokenAndRefreshToken(int size) {
         TOKEN_LIST.clear();
         REFRESHTOKEN_LIST.clear();
         try {
@@ -302,9 +305,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                     userVersionMap.put(user.getId(), version);
 
                     count++;
-                    log.debug("generateTestTokenAndRefreshToken {} success, have generate {}, version: {}",
-                            user.getId(), count, version);
-
                 } catch (Exception e) {
                     log.error("Generate token for user {} failed: {}", user.getId(), e.getMessage(), e);
                 }
@@ -378,10 +378,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             log.error("generateTestTokenAndRefreshToken unexpected error: {}", e.getMessage(), e);
         }
     }
-    /**
+
+  /**
      * 两种token导入到指定文件中
      */
+    @Override
     public void exportTokenAndRefreshTokenToCsv(int size, String fileName) {
+        log.info("Starting to generate {} tokens and refresh tokens", size);
+        PHONE_LIST.clear();
+        TOKEN_LIST.clear();
+        REFRESHTOKEN_LIST.clear();
         for (int i = 0; i < size; i++) {
             PHONE_LIST.add(generateTestPhone(i));
         }
@@ -389,7 +395,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         if (size != PHONE_LIST.size()) {
             log.info(" num size is not match");
         }
-        fileName = size + fileName;
+        fileName = fileName;
         generateTestTokenAndRefreshToken(size);
         // 写入CSV文件
         String filePath = "tokens_" + fileName + ".csv";
@@ -407,6 +413,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             log.info("CSV file exported: {}", filePath);
         } catch (IOException e) {
             log.error("Failed to write CSV file", e);
-        }
+        };
+        log.info("Finished generating and exporting tokens");
     }
 }

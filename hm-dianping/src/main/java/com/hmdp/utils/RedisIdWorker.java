@@ -92,7 +92,7 @@ public class RedisIdWorker {
     }
 
     public void showSnowflakeIdQueueInfo(int num) {
-        log.info("当前ID队列大小: {}", SNOW_FLAKE_ID_QUEUE.size());
+        log.info("当前ID队列元素个数: {}", SNOW_FLAKE_ID_QUEUE.size());
         log.info("当前ID队列是否正在刷新: {}", SNOW_FLAKE_ID_QUEUE.checkRefresh());
         log.info("指定容量{}", SNOW_FLAKE_ID_QUEUE.getInitCapacity());
         for(int i = 0; i < num; i++) {

@@ -1,5 +1,7 @@
 package com.hmdp.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.injector.methods.DeleteById;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.Enum.SeckillOrderCode;
 import com.hmdp.dto.Result;
@@ -74,7 +76,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
             log.warn("deliveryTag：{} 已超过最大重试次数 {}，放入死信队列", deliveryTag, MAX_RETRY);
             channel.basicAck(deliveryTag, false);
             rabbitTemplate.convertAndSend(
-                    RabbitMqConstants.DEAD_EXCHANGE_NAME,   // 推荐直接发交换机，更可靠
+                    RabbitMqConstants.DEAD_EXCHANGE_NAME,
                     RabbitMqConstants.DEAD_ROUTING_KEY,
                     voucherOrder);
             return;
@@ -107,9 +109,13 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     }
 
     /**
-     * 拒绝消息并重新入队，同时在 header 中增加重试次数
+     * 拒绝消息并且重新入队，同时增加重试计数
+     * @param channel
+     * @param deliveryTag
+     * @param message
+     * @param nextRetryCount
+     * @throws IOException
      */
-    // 在 rejectAndRequeueWithIncrement 方法中：
     private void rejectAndRequeueWithIncrement(Channel channel, Long deliveryTag,
                                                Message message, int nextRetryCount) throws IOException {
 
@@ -118,7 +124,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
 
         // 2. 构建新的属性副本，并设置重试计数
         MessageProperties newProps = MessagePropertiesBuilder
-                .fromClonedProperties(originalProps)// 这里使用 Spring 的 MessagePropertiesBuilder
+                .fromClonedProperties(originalProps)
                 .setHeader("x-retry-count", nextRetryCount)
                 .build();
 
@@ -151,7 +157,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     @RabbitListener(queues = RabbitMqConstants.DEAD_QUEUE_NAME)
     public void deadQueueHandler(VoucherOrder voucherOrder, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) Long deliverTag) throws IOException {
         boolean success = false;
-        log.info("订单id：{}进入死信队列", voucherOrder.getId());
+        log.warn("订单id：{}进入死信队列", voucherOrder.getId());
         channel.basicAck(deliverTag, false);
         log.info("order:{} has been down", voucherOrder.getId());
     }
@@ -161,7 +167,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     @Override
     public Result querySeckillVoucher(Long voucherId) {
         Long userId = UserHolder.getUserId();
-        Long orderId = redisIdWorker.nextId("order");
+        Long orderId = redisIdWorker.getIdFromQueue();
         Long result = stringRedisTemplate.execute(seckillScript, Collections.emptyList(), voucherId.toString(), userId.toString(), orderId.toString());
         int r = result.intValue();
         //0代表才加入缓存，1代表库存不足，2代表重复下单
@@ -176,6 +182,12 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         return Result.ok(orderId);
     }
 
+    /**
+     * 查询现有订单表是否存在用户已下的秒杀单
+     * 创建订单,失败回滚
+     * 最后在mq异步扣减库存
+     * @param voucherOrder
+     */
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void createVoucherOrder(VoucherOrder voucherOrder) {
@@ -190,16 +202,12 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Result saveOrder(Long voucherId) {
         long startTime = System.currentTimeMillis();
         Long userId = UserHolder.getUserId();
-
         // 1. 生成订单ID
         long orderIdGenStart = System.currentTimeMillis();
-        Long orderId = redisIdWorker.nextId("order");
-        log.info("【生成订单ID】耗时: {} ms", System.currentTimeMillis() - orderIdGenStart);
-
+        Long orderId = redisIdWorker.getIdFromQueue();
         // 2. 执行Lua脚本扣减库存
         Long luaResult = executeSeckillLua(voucherId, userId, orderId);
         if (!luaResult .equals( SeckillOrderCode.SUCCESS.getCode())) {
@@ -210,8 +218,6 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         // 3. 构建订单对象
         long buildOrderStart = System.currentTimeMillis();
         VoucherOrder voucherOrder = buildVoucherOrder(userId, voucherId, orderId);
-        log.info("【构建订单对象】耗时: {} ms", System.currentTimeMillis() - buildOrderStart);
-
         // 4. 保存订单到数据库（耗时操作）
         boolean saved = saveOrderToDatabase(voucherOrder);
         if (!saved) {
@@ -223,8 +229,6 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         sendMqMessage(voucherOrder);
 
         long totalTime = System.currentTimeMillis() - startTime;
-        log.info("【saveOrder总耗时】: {} ms, 订单ID: {}", totalTime, orderId);
-
         // 耗时告警
         if (totalTime > 500) {
             log.warn("【性能告警】saveOrder处理时间过长: {} ms, 用户: {}, 优惠券: {}",
@@ -232,6 +236,22 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         }
 
         return Result.ok(orderId);
+    }
+
+    /**
+     *恢复MySQl库存至指定值
+     * 并且删除MYSQL中相关订单信息
+     * @param voucherId
+     * @param stock
+     */
+    @Override
+    public void deleteVoucherOrders(Long voucherId,Long stock) {
+        seckillVoucherService.update().eq("voucher_id", voucherId).set("stock",stock).update();
+        LambdaQueryWrapper<VoucherOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(VoucherOrder::getVoucherId, voucherId);
+        boolean removed = this.remove(wrapper);
+        log.info("删除{}", removed);
+
     }
 
     /**
@@ -254,10 +274,8 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
             );
 
             long costTime = System.currentTimeMillis() - startTime;
-            log.info("【executeSeckillLua】耗时: {} ms, 结果: {}", costTime, result);
-
             // Lua脚本执行耗时告警
-            if (costTime > 100) {
+            if (costTime > 200) {
                 log.warn("【性能告警】Lua脚本执行过慢: {} ms", costTime);
             }
 
@@ -290,10 +308,6 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         try {
             boolean saved = save(voucherOrder);
             long costTime = System.currentTimeMillis() - startTime;
-
-            log.info("【saveOrderToDatabase】耗时: {} ms, 订单ID: {}, 结果: {}",
-                    costTime, voucherOrder.getId(), saved);
-
             // 数据库操作耗时告警
             if (costTime > 200) {
                 log.warn("【性能告警】数据库保存过慢: {} ms, 订单ID: {}",
@@ -309,12 +323,12 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
         }
     }
 
+
     /**
      * 发送MQ消息（异步操作）
      */
-    private void sendMqMessage(VoucherOrder voucherOrder) {
-        long startTime = System.currentTimeMillis();
-
+    @Override
+    public void sendMqMessage(VoucherOrder voucherOrder) {
         try {
             rabbitTemplate.convertAndSend(
                     RabbitMqConstants.NORMAL_EXCHANGE_NAME,
@@ -322,19 +336,9 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
                     voucherOrder
             );
 
-            long costTime = System.currentTimeMillis() - startTime;
-            log.info("【sendMqMessage】耗时: {} ms, 订单ID: {}", costTime, voucherOrder.getId());
-
-            // MQ发送耗时告警
-            if (costTime > 100) {
-                log.warn("【性能告警】MQ发送过慢: {} ms, 订单ID: {}",
-                        costTime, voucherOrder.getId());
-            }
-
         } catch (AmqpException e) {
-            long costTime = System.currentTimeMillis() - startTime;
-            log.error("【sendMqMessage】发送失败, 耗时: {} ms, 订单ID: {}",
-                    costTime, voucherOrder.getId(), e);
+            log.error("【sendMqMessage】发送失败,  订单ID: {}",
+                     voucherOrder.getId(), e);
             throw new RuntimeException("异步更新库存失败", e);
         }
     }

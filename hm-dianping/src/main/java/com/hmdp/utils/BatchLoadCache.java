@@ -49,6 +49,7 @@ public class BatchLoadCache {
     public void loadCache() {
         //操作时不允许新增，需要前后读取到的一致
         //转移期间不允许新加入id
+
         Set<Long> writing =new HashSet<>(writingUserIds);
         writingUserIds.clear();
         usingUserIds =writing;
@@ -63,6 +64,7 @@ public class BatchLoadCache {
     }
     public void saveFuture(Long userId) {
         if(usingUserIds.contains(userId)) {
+
             log.info("用户{}的缓存正在更新中，已存在任务中，无需重复添加", userId);
             return;
         }
@@ -89,6 +91,7 @@ public class BatchLoadCache {
             });
             for (int i = 0; i < userIds.size(); i++) {
                 Long userId = userIds.get(i);
+
                 String redisKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
                 Map<String,String> hashMap = (Map<String ,String>) redisCache.get(i);
 

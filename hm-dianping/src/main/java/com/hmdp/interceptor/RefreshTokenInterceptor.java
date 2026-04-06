@@ -1,33 +1,27 @@
 package com.hmdp.interceptor;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.json.JSONUtil;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.hmdp.Enum.TokenRefreshCode;
-import com.hmdp.entity.User;
 import com.hmdp.entity.UserinfoCache;
-import com.hmdp.interceptor.annotation.RecordTime;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
-import com.github.benmanes.caffeine.cache.Cache;           // 缓存接口
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -68,18 +62,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             // 公开路径检查 - 开始计时
             long publicPathStartTime = System.currentTimeMillis();
             String uri = request.getRequestURI();
-            if (uri.equals("/blog/hot") || uri.startsWith("/blog/hot")
-                    || uri.equals("/user/login")
-                    || uri.equals("/user/code")
-                    || uri.equals("/shop-type/list")) {
-                log.info("【公开路径检查】耗时: {} ms", System.currentTimeMillis() - publicPathStartTime);
-                log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
-                return true;
-            }
-
             log.info("拦截路径 {}", request.getRequestURI());
-
-
             // Token空值检查 - 开始计时
             long tokenNullCheckStartTime = System.currentTimeMillis();
             String token = request.getHeader("authorization");
@@ -100,12 +83,9 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
             Claims claims;
             try {
-                // Token解析 - 开始计时
                 response.setHeader("authorization", token);
                 response.setHeader("Refresh-Token", request.getHeader("Refresh-Token"));
                 claims = jwtUtil.valiateAndGetClaimFromToken(token);
-                // 验证用户信息 - 开始计时
-                long validateUserStartTime = System.currentTimeMillis();
                 if (valiateClaimAndSaveUser(response, claims, token)) {
                     Date expiration = claims.getExpiration();
                     long now = System.currentTimeMillis();
@@ -313,6 +293,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      * @param e
      * @return
      */
+    @SuppressWarnings("AlibabaRemoveCommentedCode")
     public HttpServletResponse handleExpiredToken(HttpServletRequest request, HttpServletResponse response, ExpiredJwtException e)  {
         String token = request.getHeader("authorization");
         log.info("token  expired");
@@ -332,7 +313,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String tokenKey = RedisConstants.LOGIN_USER_KEY + userId;
         String refreshToken = request.getHeader("Refresh-Token");
         String newRefreshToken = UUID.randomUUID().toString().replace("-", "");
-        String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
+        String validVersionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
         Long newVersion = redisIdWorker.nextVersion();
         String newVersionKey = RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId;
         Long newVersionExpireSeconds = RedisConstants.NEW_VERSION_TTL_SECONDS;
@@ -358,7 +339,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         List<String> keys = new ArrayList<>();
         keys.add(refreshKey);
         keys.add(tokenKey);
-        keys.add(versionKey);
+        keys.add(validVersionKey);
         keys.add(newVersionKey);
         Long luaResult = stringRedisTemplate.execute(refreshDeadTokenScript, keys, args.toArray());
         if(luaResult.equals(TokenRefreshCode.SUCCESS.getCode())) {

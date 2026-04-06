@@ -1,6 +1,8 @@
 package com.hmdp.service.impl;
 
 import com.hmdp.dto.Result;
+import com.hmdp.entity.VoucherOrder;
+import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.ITestService;
 import com.hmdp.service.IUserService;
 import com.hmdp.service.IVoucherOrderService;
@@ -13,6 +15,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
 
 @Service
 @Slf4j
@@ -70,6 +73,28 @@ public class TestServiceimpl implements ITestService {
     public Result checkSnowFlake(int num) {
         redisIdWorker.showSnowflakeIdQueueInfo(num);
         log.info("取出的ID数量: {}", num);
+        return Result.ok();
+    }
+
+
+    /**
+     * 用于压测mysql的测试方法
+     * 模拟生成订单的过程，实际业务中会有更多的逻辑，这里仅仅是为了测试数据库的性能
+     * 这里不做扣减redis的库存等操作，直接生成订单数据插入数据库
+     * @param voucherId
+     * @param orderNum
+     * @return
+     */
+    @Override
+    public Result testSaveOrder(Long voucherId, Long orderNum) {
+        VoucherOrder voucherOrder = new VoucherOrder().setId(redisIdWorker.getIdFromQueue()).setVoucherId(voucherId)
+                .setStatus(1).setUserId(123L).setCreateTime(LocalDateTime.now());
+        long startTime = System.nanoTime();
+        for(int i=0 ; i<orderNum; i++){
+            voucherOrderService.sendMqMessage(voucherOrder);
+        }
+        long endTime = System.nanoTime();
+        log.info("发送 {} 条订单消息耗时: {} ms", orderNum, (endTime - startTime) / 1_000_000);
         return Result.ok();
     }
 }
