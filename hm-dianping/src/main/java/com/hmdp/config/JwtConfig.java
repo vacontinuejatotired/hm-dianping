@@ -10,6 +10,7 @@ public class JwtConfig {
 
     @Bean
     public JwtUtil jwtUtil(DefaultResourceLoader defaultResourceLoader) {
+
         JwtUtil jwtUtil = new JwtUtil(defaultResourceLoader);
         return jwtUtil;
     }

@@ -9,4 +9,6 @@ public interface ITestService {
     Result generateTestToken(Long num,String fileName);
 
     Result checkSnowFlake(int num);
+
+    Result testSaveOrder(Long voucherId, Long orderNum);
 }

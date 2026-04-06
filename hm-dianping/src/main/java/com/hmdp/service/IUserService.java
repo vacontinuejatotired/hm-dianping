@@ -23,4 +23,10 @@ public interface IUserService extends IService<User> {
     Result sign();
 
     Result getSignCount();
+
+    /**
+     * 指定生成多少个可用的token并且导入致指定csv文件
+     * @param size
+     */
+    void exportTokenAndRefreshTokenToCsv(int size, String fileName);
 }

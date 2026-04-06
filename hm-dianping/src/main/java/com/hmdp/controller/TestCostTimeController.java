@@ -44,4 +44,9 @@ public class TestCostTimeController {
     public Result testCheckSnowFlake(@PathVariable int num) {
         return testService.checkSnowFlake(num);
     }
+    @GetMapping("/mq/order/save/{voucherId}/{orderNum}")
+    public Result testMq(@PathVariable Long voucherId,@PathVariable Long orderNum) {
+        return  testService.testSaveOrder(voucherId,orderNum);
+
+    }
 }

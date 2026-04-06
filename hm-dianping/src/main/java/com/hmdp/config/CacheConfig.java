@@ -36,15 +36,11 @@ public class CacheConfig {
                     public @Nullable UserinfoCache load(@NonNull String key) throws Exception {
                         // 缓存缺失时加载（第一次调用）
                         Long userId = Long.valueOf(key.substring(CaffeineConstants.USERINFO_CACHE_KEY.length()));
-                        Long startTime = System.nanoTime();
                         batchLoadCache.saveFuture(userId);
-                        Long asyncTime = System.nanoTime();
                         UserinfoCache userinfoCache = new UserinfoCache();
                         userinfoCache.setId(userId);
                         userinfoCache.setIcon("");
                         userinfoCache.setNickName("");
-                        Long endTime = System.nanoTime();
-                        log.info("同步加载用户信息: userId={}, loadTime={}ms, asyncTriggerTime={}ms", userId, (endTime - startTime) / 1_000_000, (asyncTime - startTime) / 1_000_000);
                         return userinfoCache;
                     }
 

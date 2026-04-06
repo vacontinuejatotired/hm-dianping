@@ -43,7 +43,7 @@ public class RedisLuaConfig {
 
     @Bean(name = "refreshDeadTokenScript")
     public DefaultRedisScript<Long> refreshTokenScript2() {
-        return createScript("RefreshRefreshToken.lua", Long.class);
+        return createScript("RefreshExpiredToken.lua", Long.class);
     }
 
 }
