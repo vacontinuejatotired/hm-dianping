@@ -8,7 +8,7 @@
 - 数据库：MySQL
 - 缓存：Redis（Lua 脚本、Hash、分布式锁）
 - 消息队列：RabbitMQ（可靠投递、幂等）
-- 工具：Maven、Git、JMeter（压测）、Docker
+- 工具：Maven、Git、JMeter（压测）、Docker,Arthas
 
 ## 用户认证与安全优化
 
@@ -22,7 +22,8 @@
 
 [查看登录流程](md/login-process-flow.md)  
 [查看Refresh拦截器流程](md/refresh-token-interceptor-flow.md)
-
+[查看压测报告](md/下单优化压测报告.md)
+[查看刷新过期Token流程](md/refresh-expired-token-flow.md)
 ## 高并发库存扣减优化
 
 针对高并发下单场景，原直接扣减数据库易导致锁竞争和延迟，采用Redis预减库存 + 异步消息落库方案。库存扣减逻辑使用Lua脚本原子执行，消息通过RabbitMQ可靠投递。
@@ -63,6 +64,7 @@
 1. 配置 application.yml 中的 Redis、MySQL、RabbitMQ 连接信息。
 2. 启动项目：`mvn spring-boot:run` 或 IDE 直接运行。
 3. 压测脚本位于项目根目录下的 JMeter 文件（.jmx）。
+4. ReadMe是Ai写的，运行这里有问题可以来问我，或者直接看代码，代码里有注释。
 
 项目依赖Redis和RabbitMQ，可使用Docker快速部署：
 - Redis：`docker run -d -p 6379:6379 redis:alpine`
@@ -79,5 +81,5 @@ Docker部署Redis/RabbitMQ + 本机Spring Boot 空接口压测结果：JMeter 55
 - 批量缓存加载工具：`src/main/java/com/hmdp/utils/BatchLoadCache.java`（异步批量加载用户缓存）
 - 分布式ID生成工具：`src/main/java/com/hmdp/utils/RedisIdWorker.java`（雪花算法ID生成）
 - Caffeine缓存配置：`src/main/java/com/hmdp/config/CacheConfig.java`（本地缓存配置）
-
+- 测试脚本: '空接口耗时.jmx'（JMeter测试脚本）
 最后更新：2026 年 3 月
