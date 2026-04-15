@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+    <property name="LOG_PATH" value="./logs" />
+    <property name="LOG_FILE_NAME" value="hm-dianping" />
+
+    <!-- 控制台输出 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 文件输出：所有日志 -->
+    <appender name="FILE_ALL_SYNC" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <append>false</append>
+        <file>${LOG_PATH}/${LOG_FILE_NAME}.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${LOG_FILE_NAME}.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 文件输出：WARN/ERROR -->
+    <appender name="FILE_WARN_ERROR_SYNC" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <append>false</append>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <file>${LOG_PATH}/${LOG_FILE_NAME}-warn-error.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${LOG_FILE_NAME}-warn-error.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 通用日志异步Appender - 高性能 -->
+    <appender name="ASYNC_FILE_ALL" class="ch.qos.logback.classic.AsyncAppender">
+        <!-- 队列大小：根据QPS调整，建议8192-16384 -->
+        <queueSize>16384</queueSize>
+
+        <!-- 永不阻塞：业务优先，日志可丢 -->
+        <neverBlock>true</neverBlock>
+
+        <!-- 丢弃阈值：队列剩余20%时开始丢弃低级日志 -->
+        <discardingThreshold>20</discardingThreshold>
+
+        <!-- 不包含调用者信息（提升性能） -->
+        <includeCallerData>false</includeCallerData>
+
+        <!-- 最大刷新时间：队列满时等待多久（毫秒） -->
+        <maxFlushTime>1000</maxFlushTime>
+
+        <appender-ref ref="FILE_ALL_SYNC"/>
+    </appender>
+
+    <!-- 错误日志异步Appender - 可靠性 -->
+    <appender name="ASYNC_WARN_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>4096</queueSize>
+        <neverBlock>false</neverBlock>  <!-- WARN/ERROR必须记录 -->
+        <discardingThreshold>0</discardingThreshold>  <!-- 永不丢弃 -->
+        <includeCallerData>true</includeCallerData>  <!-- 错误日志需要调用者信息 -->
+        <maxFlushTime>5000</maxFlushTime>  <!-- 停机时最多等5秒 -->
+        <appender-ref ref="FILE_WARN_ERROR_SYNC"/>
+    </appender>
+
+    <!-- 同步Appender配置优化 -->
+    <appender name="FILE_ALL_SYNC" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 使用直接缓冲区模式，减少IO次数 -->
+        <immediateFlush>false</immediateFlush>  <!-- 关键！不立即刷盘 -->
+        <file>${LOG_PATH}/app.log</file>
+        <!-- 其他配置保持不变... -->
+    </appender>
+
+    <!-- 根日志级别 - 设为INFO保证Spring Boot启动日志能打印 -->
+    <root level="INFO">
+        <!-- 控制台一定要有，否则看不到日志 -->
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE_ALL" />
+        <appender-ref ref="ASYNC_WARN_ERROR" />
+    </root>
+
+    <!-- 关键：设置com.hmdp包为WARN，过滤掉INFO日志 -->
+    <logger name="com.hmdp" level="WARN" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE_ALL" />
+        <appender-ref ref="ASYNC_WARN_ERROR" />
+    </logger>
+
+    <!-- Spring框架的日志保持INFO，可以看到启动信息 -->
+    <logger name="org.springframework" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE_ALL" />
+    </logger>
+
+    <!-- 其他第三方库保持WARN，减少噪音 -->
+    <logger name="org.apache" level="WARN"/>
+    <logger name="io.lettuce" level="WARN"/>
+    <logger name="redis.clients" level="WARN"/>
+    <logger name="com.hmdp.interceptor.RefreshTokenInterceptor" level="WARN"/>
+</configuration>
