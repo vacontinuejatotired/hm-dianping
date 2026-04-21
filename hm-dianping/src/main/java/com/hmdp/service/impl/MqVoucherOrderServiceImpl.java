@@ -31,7 +31,7 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -192,7 +192,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     @Override
     public void createVoucherOrder(VoucherOrder voucherOrder) {
         Long userId = voucherOrder.getUserId();
-        int count = query().eq("user_id", voucherOrder.getUserId()).eq("voucher_id", voucherOrder.getVoucherId()).count();
+        int count = Math.toIntExact(query().eq("user_id", voucherOrder.getUserId()).eq("voucher_id", voucherOrder.getVoucherId()).count());
         if (count > 0) {
             log.error("该用户已经购买过");
             return;

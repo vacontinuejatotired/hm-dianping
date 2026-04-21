@@ -1,20 +1,22 @@
 package com.hmdp.utils;
 
+import cn.hutool.core.util.RandomUtil;
 import com.esotericsoftware.minlog.Log;
 import com.hmdp.entity.SnowflakeIdQueue;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 @Component

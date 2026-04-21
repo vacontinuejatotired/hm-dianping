@@ -6,13 +6,13 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.hmdp.entity.User;
 import com.hmdp.entity.UserinfoCache;
 import com.hmdp.service.IUserService;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

@@ -10,10 +10,11 @@ import com.hmdp.mapper.FollowMapper;
 import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
+import jodd.typeconverter.impl.IntegerConverter;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -37,7 +38,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     @Override
     public Result queryNotFollow(Long id) {
     Long userId=UserHolder.getUserId();
-    Integer count=query().eq("user_id",userId).eq("follow_user_id",id).count();
+    Integer count= Math.toIntExact(query().eq("user_id", userId).eq("follow_user_id", id).count());
         return Result.ok(count>0);
     }
 

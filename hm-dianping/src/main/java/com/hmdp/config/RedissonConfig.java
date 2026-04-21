@@ -9,13 +9,13 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RedissonConfig {
-    @Value(value = "${spring.redis.host}")
+    @Value(value = "${spring.data.redis.host}")
     private String redisHost;
 
-    @Value(value = "${spring.redis.port}")
+    @Value(value = "${spring.data.redis.port}")
     private Integer redisPort;
 
-    @Value(value = "${spring.redis.password}")
+    @Value(value = "${spring.data.redis.password}")
     private String redisPassword;
 
     @Bean

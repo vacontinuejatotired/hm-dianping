@@ -125,7 +125,7 @@
          arguments.put("x-dead-letter-exchange", RabbitMqConstants.DEAD_EXCHANGE_NAME);
          arguments.put("x-dead-letter-routing-key",RabbitMqConstants.DEAD_ROUTING_KEY);
          arguments.put("x-message-ttl", 60000);
-         arguments.put("x-max-length", 10000);
+         arguments.put("x-max-length", 100000);
          arguments.put("x-queue-type","classic");
          return QueueBuilder.durable(RabbitMqConstants.QUEUE_NAME).withArguments(arguments).build();
      }

@@ -4,7 +4,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.service.ITestService;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @RestController
 @RequestMapping("/test")

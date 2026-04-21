@@ -4,7 +4,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.UserInfo;
 import com.baomidou.mybatisplus.extension.service.IService;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * <p>

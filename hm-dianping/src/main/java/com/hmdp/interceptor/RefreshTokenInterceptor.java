@@ -15,9 +15,9 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
@@ -70,14 +70,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 log.info("token is null");
                 log.info("【Token空值检查】耗时: {} ms", System.currentTimeMillis() - tokenNullCheckStartTime);
                 log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED, "token is null");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return false;
             }
             if (request.getHeader("Refresh-Token") == null) {
                 log.info("Refresh-Token is null");
                 log.info("【Token空值检查】耗时: {} ms", System.currentTimeMillis() - tokenNullCheckStartTime);
                 log.info("【preHandle总耗时】: {} ms", System.currentTimeMillis() - methodStartTime);
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED, "Refresh-Token is null");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return false;
             }
 
