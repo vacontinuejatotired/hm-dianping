@@ -19,6 +19,7 @@
 - **原子刷新**：高并发下Token刷新可能冲突，使用Redis Lua脚本原子执行检查、删除旧Token、写入新Token。
 - **单设备登录**：多设备登录导致Token混乱，Redis存储用户当前有效Token，新登录失效旧Token。
 - **缓存优化**：频繁查询用户信息影响性能，采用Caffeine本地缓存 + Redis Hash + 异步批量加载，减少数据库压力。
+- **Token版本本地缓存**：每次请求都查Redis校验版本号增加网络开销，采用Caffeine本地缓存快速拒绝 + Redis最终校验的两级策略。本地缓存命中但版本不匹配时直接拒绝（token一定无效），命中且版本匹配或未命中时走Redis做最终校验，校验通过后同步更新本地缓存。
 
 [查看登录流程](md/login-process-flow.md)  
 [查看Refresh拦截器流程](md/refresh-token-interceptor-flow.md)  

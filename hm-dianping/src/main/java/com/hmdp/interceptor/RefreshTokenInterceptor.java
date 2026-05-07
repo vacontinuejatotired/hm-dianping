@@ -57,7 +57,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         try {
             log.info("拦截路径 {}", request.getRequestURI());
 
-            if (!validateTokenPresence(request, response)) {
+            if (!checkTokenHeader(request, response)) {
                 return false;
             }
 
@@ -69,9 +69,9 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
             try {
                 Claims claims = jwtUtil.valiateAndGetClaimFromToken(token);
-                return handleValidToken(request, response, claims, token, refreshToken);
+                return tryRefreshIfNeeded(request, response, claims, token, refreshToken);
             } catch (ExpiredJwtException e) {
-                return handleExpiredToken(request, response, e);
+                return refreshExpiredToken(request, response, e);
             } catch (Exception e) {
                 log.error(e.getMessage());
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -89,7 +89,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      * 校验请求头中 token 和 Refresh-Token 是否都存在
      * 任一为空则直接返回 false
      */
-    private boolean validateTokenPresence(HttpServletRequest request, HttpServletResponse response) {
+    private boolean checkTokenHeader(HttpServletRequest request, HttpServletResponse response) {
         String token = request.getHeader("authorization");
         if (token == null) {
             log.info("token is null");
@@ -108,10 +108,12 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      * 处理未过期的 JWT token
      * 1. 解析 claims 并保存用户信息到 ThreadLocal
      * 2. 通过本地 Caffeine 缓存快速校验版本号
+     *    - HIT_MISMATCH → 直接拒绝（本地缓存版本比 token 新，token 一定无效）
+     *    - HIT_MATCH / MISS → 走 Redis 做最终校验
      * 3. 判断 token 是否临期（剩余 < 5-10 分钟），临期则走 Lua 刷新
      */
-    private boolean handleValidToken(HttpServletRequest request, HttpServletResponse response, Claims claims, String token, String clientRefreshToken) {
-        if (!valiateClaimAndSaveUser(response, claims, token)) {
+    private boolean tryRefreshIfNeeded(HttpServletRequest request, HttpServletResponse response, Claims claims, String token, String clientRefreshToken) {
+        if (!resolveAndSaveUser(response, claims, token)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
@@ -119,9 +121,31 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         Long versionFromToken = claims.get("version", Long.class);
         Long userId = UserHolder.getUserId();
 
-        if (!validateLocalVersionCache(userId, versionFromToken)) {
-            log.info("本地缓存校验未通过，需走Redis校验 userId: {}", userId);
+        Integer localCacheStatus = validateLocalVersionCache(userId, versionFromToken);
+
+        if (CaffeineConstants.TOKEN_VERSION_CACHE_HIT_MISMATCH.equals(localCacheStatus)) {
+            log.info("本地缓存版本不匹配，token一定无效，直接拒绝 userId: {}", userId);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return false;
         }
+
+        if (CaffeineConstants.TOKEN_VERSION_CACHE_MISS.equals(localCacheStatus)) {
+            log.info("本地缓存未命中，走Redis校验 userId: {}", userId);
+        }
+
+        String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
+        String redisVersion = stringRedisTemplate.opsForValue().get(versionKey);
+        if (redisVersion == null) {
+            log.info("Redis中版本号不存在，userId: {}", userId);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return false;
+        }
+        if (Long.parseLong(redisVersion) > versionFromToken) {
+            log.info("Redis版本校验不通过，userId: {}, Redis版本: {}, token版本: {}", userId, redisVersion, versionFromToken);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return false;
+        }
+        updateLocalVersionCache(userId, versionFromToken);
 
         Date expiration = claims.getExpiration();
         long timeToExpire = expiration.getTime() - System.currentTimeMillis();
@@ -137,30 +161,27 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 通过本地 Caffeine 缓存快速校验 token 版本号是否有效
-     * 缓存命中且版本匹配 → 返回 true（无需走 Redis）
-     * 缓存未命中 / 版本不匹配 → 返回 false（需走 Redis 校验）
+     * 通过本地 Caffeine 缓存快速校验 token 版本号
+     * HIT_MATCH    → 命中且版本匹配（分布式下可能不是最新，仍需走 Redis 确认）
+     * HIT_MISMATCH → 命中但版本不匹配（token 一定无效，直接拒绝）
+     * MISS         → 未命中（走 Redis 做最终校验）
      */
-    private boolean validateLocalVersionCache(Long userId, Long versionFromToken) {
+    private Integer validateLocalVersionCache(Long userId, Long versionFromToken) {
         String versionKey = CaffeineConstants.TOKEN_VALID_VERSION_CACHE_KEY + userId;
         TokenVersionCache localCache = tokenValidVersionCache.getIfPresent(versionKey);
 
         if (localCache == null) {
             log.info("本地版本缓存未命中，userId: {}", userId);
-            return false;
+            return CaffeineConstants.TOKEN_VERSION_CACHE_MISS;
         }
 
-        Integer status = localCache.getStatus();
-        if (CaffeineConstants.TOKEN_VERSION_CACHE_HIT.equals(status)) {
-            if (!localCache.getVersion().equals(versionFromToken)) {
-                log.info("本地版本缓存过期，userId: {}, 缓存版本: {}, token版本: {}", userId, localCache.getVersion(), versionFromToken);
-                return false;
-            }
-            log.info("本地版本缓存命中，userId: {}, version: {}", userId, versionFromToken);
-            return true;
+        if (!localCache.getVersion().equals(versionFromToken)) {
+            log.info("本地版本缓存不匹配，userId: {}, 缓存版本: {}, token版本: {}", userId, localCache.getVersion(), versionFromToken);
+            return CaffeineConstants.TOKEN_VERSION_CACHE_HIT_MISMATCH;
         }
 
-        return false;
+        log.info("本地版本缓存命中，userId: {}, version: {}", userId, versionFromToken);
+        return CaffeineConstants.TOKEN_VERSION_CACHE_HIT_MATCH;
     }
 
     /**
@@ -254,7 +275,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         TokenVersionCache tokenVersionCache = new TokenVersionCache();
         tokenVersionCache.setUserId(userId);
         tokenVersionCache.setVersion(version);
-        tokenVersionCache.setStatus(CaffeineConstants.TOKEN_VERSION_CACHE_HIT);
+        tokenVersionCache.setStatus(CaffeineConstants.TOKEN_VERSION_CACHE_HIT_MATCH);
         tokenValidVersionCache.put(versionKey, tokenVersionCache);
     }
 
@@ -263,12 +284,12 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      * 通过 RefreshExpiredToken.lua 原子性校验 refreshToken 和版本号，
      * 校验通过后生成新 token、新 refreshToken、新版本号并更新 Redis
      */
-    private boolean handleExpiredToken(HttpServletRequest request, HttpServletResponse response, ExpiredJwtException e) {
+    private boolean refreshExpiredToken(HttpServletRequest request, HttpServletResponse response, ExpiredJwtException e) {
         long expiredTokenHandleStartTime = System.currentTimeMillis();
 
         String token = request.getHeader("authorization");
 
-        boolean result = valiateClaimAndSaveUser(response, e.getClaims(), token);
+        boolean result = resolveAndSaveUser(response, e.getClaims(), token);
         if (!result) {
             log.info("【过期token处理】耗时: {} ms", System.currentTimeMillis() - expiredTokenHandleStartTime);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -358,7 +379,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      * @param token
      * @return
      */
-    private boolean valiateClaimAndSaveUser(HttpServletResponse response, Claims claims, String token) {
+    private boolean resolveAndSaveUser(HttpServletResponse response, Claims claims, String token) {
         if (claims == null || claims.isEmpty()) {
             return false;
         }
