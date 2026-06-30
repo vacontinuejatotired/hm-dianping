@@ -22,23 +22,16 @@ import com.hmdp.utils.security.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
-import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpSession;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * 用户服务实现 — 手机验证码登录、密码登录、签到（Redis BitMap）、双Token生成
@@ -53,9 +46,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     private RedisIdWorker redisIdWorker;
     @Resource
     private JwtUtil jwtUtil;
-    private static final List<String> TOKEN_LIST = new ArrayList<>();
-    private static final List<String> PHONE_LIST = new ArrayList<>();
-    private static final List<String> REFRESHTOKEN_LIST = new ArrayList<>();
+    @Resource(name = "consumeVerifyCodeScript")
+    private DefaultRedisScript<String> consumeVerifyCodeScript;
 
     public static final DefaultRedisScript<String> REDIS_LOGIN_SET_TOKEN ;
     static {
@@ -66,13 +58,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Override
 //    @Transactional(rollbackFor = SQLException.class)
 //    @AutoUpdateTime(printLog = true)
-    public Result login(LoginFormDTO loginForm, HttpSession session) {
+    public Result login(LoginFormDTO loginForm) {
         String code = loginForm.getCode();
         String phone = loginForm.getPhone();
         if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号不规范");
         }
-        String tempCode = stringRedisTemplate.opsForValue().get(RedisConstants.LOGIN_CODE_KEY + phone);
+        String tempCode = stringRedisTemplate.execute(consumeVerifyCodeScript, List.of(RedisConstants.LOGIN_CODE_KEY + phone));
         if (code == null || !code.equals(tempCode)) {
             log.info("传入验证码{}，实际验证码{}", loginForm.getCode(), tempCode);
             return Result.fail("验证码错误");
@@ -196,229 +188,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     @Override
-    public Result sendCode(String phone, HttpSession session) {
+    public Result sendCode(String phone) {
         if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号不规范");
         }
-        String code = RandomUtil.randomString(6);
+        String freqKey = "login:code:freq:" + phone;
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(freqKey))) {
+            return Result.fail("发送太频繁，请稍后再试");
+        }
+        String code = RandomUtil.randomNumbers(6);
         stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_CODE_KEY + phone, code, RedisConstants.LOGIN_CODE_TTL, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(freqKey, "1", 60, TimeUnit.SECONDS);
         log.info("send code {} success", code);
         return Result.ok();
     }
-
-    // 获取生成的token列表
-    public static List<String> getTokenList() {
-        return new ArrayList<>(TOKEN_LIST);
-    }
-
-    // 获取生成的手机号列表
-    public static List<String> getPhoneList() {
-        return new ArrayList<>(PHONE_LIST);
-    }
-
-    private String generateTestPhone(int index) {
-        return String.format("137%08d", index);
-    }
-
-
-
-     /**
-     * 用于测试的批量生成两种token方法
-     * @param size
-     */
-
-    public void generateTestTokenAndRefreshToken(int size) {
-        TOKEN_LIST.clear();
-        REFRESHTOKEN_LIST.clear();
-        try {
-            // 参数校验
-            if (size <= 0) {
-                log.error("generateTestTokenAndRefreshToken failed: size must be positive, current size: {}", size);
-                return;
-            }
-
-            if (PHONE_LIST.isEmpty()) {
-                log.error("generateTestTokenAndRefreshToken failed: PHONE_LIST is empty");
-                return;
-            }
-
-            // 查询已存在的用户
-            List<User> existingUsers;
-            try {
-                existingUsers = query().in("phone", PHONE_LIST).list();
-                log.info("Query users success, found {} users", existingUsers.size());
-            } catch (Exception e) {
-                log.error("Query users failed: {}", e.getMessage(), e);
-                return;
-            }
-
-            // 找出缺失的手机号并创建新用户
-            Set<String> existingPhones = existingUsers.stream()
-                    .map(User::getPhone)
-                    .collect(Collectors.toSet());
-            List<User> newUsers = new ArrayList<>();
-            List<String> missingPhones = new ArrayList<>();
-            for (String phone : PHONE_LIST) {
-                if (!existingPhones.contains(phone)) {
-                    missingPhones.add(phone);
-                    // 创建新用户
-                    User newUser = new User()
-                            .setPhone(phone)
-                            .setNickName(SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomString(6))
-                            .setCreateTime(LocalDateTime.now())
-                            .setUpdateTime(LocalDateTime.now());
-                    newUsers.add(newUser);
-                }
-            }
-
-            // 批量插入新用户
-            if (!newUsers.isEmpty()) {
-                log.info("Creating {} new users for missing phones", newUsers.size());
-                try {
-                    saveBatch(newUsers);
-                    log.info("Successfully created {} new users", newUsers.size());
-
-                    // 重新查询所有用户（包括刚创建的）
-                    existingUsers = query().in("phone", PHONE_LIST).list();
-                    log.info("Re-query users success, now found {} users", existingUsers.size());
-                } catch (Exception e) {
-                    log.error("Failed to create new users: {}", e.getMessage(), e);
-                    return;
-                }
-            }
-
-            int count = 0;
-            // 用于存储每个用户生成的version
-            Map<Long, Long> userVersionMap = new HashMap<>();
-
-            for (User user : existingUsers) {
-                try {
-                    // 生成token
-                    Long version = redisIdWorker.nextVersion(user.getId());
-                    String token = jwtUtil.generateToken(user.getId(), 1800L, ChronoUnit.SECONDS, version);
-                    if (token == null || token.isEmpty()) {
-                        log.error("Generate token failed for user: {}", user.getId());
-                        continue;
-                    }
-                    TOKEN_LIST.add(token);
-
-                    // 生成refresh token
-                    String refreshToken = UUID.randomUUID().toString().replace("-", "");
-                    REFRESHTOKEN_LIST.add(refreshToken);
-
-                    // 记录version
-                    userVersionMap.put(user.getId(), version);
-
-                    count++;
-                } catch (Exception e) {
-                    log.error("Generate token for user {} failed: {}", user.getId(), e.getMessage(), e);
-                }
-            }
-
-            // 批量插入Redis - 使用简单的set
-            if (!TOKEN_LIST.isEmpty() && TOKEN_LIST.size() == REFRESHTOKEN_LIST.size()) {
-                try {
-                    // 使用pipeline批量操作
-                    List<User> finalExistingUsers = existingUsers;
-                    stringRedisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-                        for (int i = 0; i < TOKEN_LIST.size(); i++) {
-                            String token = TOKEN_LIST.get(i);
-                            String refreshToken = REFRESHTOKEN_LIST.get(i);
-                            User user = finalExistingUsers.get(i);
-                            Long version = userVersionMap.get(user.getId());
-
-                            // 1. 存token
-                            String tokenKey = RedisConstants.LOGIN_USER_KEY + user.getId();
-                            connection.set(tokenKey.getBytes(StandardCharsets.UTF_8),
-                                    token.getBytes(StandardCharsets.UTF_8));
-                            connection.expire(tokenKey.getBytes(StandardCharsets.UTF_8),
-                                     1800L); // 30分钟
-
-                            // 2. 存refreshToken
-                            String refreshKey = RedisConstants.LOGIN_REFRESH_USER_KEY + user.getId();
-                            connection.set(refreshKey.getBytes(StandardCharsets.UTF_8),
-                                    refreshToken.getBytes(StandardCharsets.UTF_8));
-                            connection.expire(refreshKey.getBytes(StandardCharsets.UTF_8),
-                                    RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS); // 7天
-
-                            // 3. 存有效version（使用刚生成的version）
-                            String validVersionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + user.getId();
-                            connection.set(validVersionKey.getBytes(StandardCharsets.UTF_8),
-                                    version.toString().getBytes(StandardCharsets.UTF_8));
-                            connection.expire(validVersionKey.getBytes(StandardCharsets.UTF_8),
-                                    RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS); // 7天
-
-                            // 4. 存最新version计数器（使用刚生成的version）
-                            String newVersionKey = RedisConstants.CURRENT_TOKEN_VERSION_KEY + user.getId();
-                            connection.set(newVersionKey.getBytes(StandardCharsets.UTF_8),
-                                    version.toString().getBytes(StandardCharsets.UTF_8));
-                            connection.expire(newVersionKey.getBytes(StandardCharsets.UTF_8),
-                                    8 * 24 * 60 * 60); // 8天
-                        }
-                        return null;
-                    });
-
-                    log.info("Successfully inserted {} tokens into Redis using pipeline", TOKEN_LIST.size());
-
-                } catch (Exception e) {
-                    log.error("Failed to batch insert tokens to Redis: {}", e.getMessage(), e);
-                }
-            }
-
-            // 结果校验
-            if (size != count) {
-                log.warn("generateTestTokenAndRefreshToken: expected {}, actually generated {} (missing: {})",
-                        size, count, size - count);
-            } else {
-                log.info("generate {} tokens success, all tokens generated and inserted to Redis", size);
-            }
-
-            // 检查列表长度是否一致
-            if (TOKEN_LIST.size() != REFRESHTOKEN_LIST.size()) {
-                log.error("Data inconsistency: token size {} != refreshToken size {}",
-                        TOKEN_LIST.size(), REFRESHTOKEN_LIST.size());
-            }
-
-        } catch (Exception e) {
-            log.error("generateTestTokenAndRefreshToken unexpected error: {}", e.getMessage(), e);
-        }
-    }
-
-  /**
-     * 两种token导入到指定文件中
-     */
-    @Override
-    public void exportTokenAndRefreshTokenToCsv(int size, String fileName) {
-        log.info("Starting to generate {} tokens and refresh tokens", size);
-        PHONE_LIST.clear();
-        TOKEN_LIST.clear();
-        REFRESHTOKEN_LIST.clear();
-        for (int i = 0; i < size; i++) {
-            PHONE_LIST.add(generateTestPhone(i));
-        }
-        log.info("generate {} phone, admin really confirm {}", PHONE_LIST.size(), size);
-        if (size != PHONE_LIST.size()) {
-            log.info(" num size is not match");
-        }
-        fileName = fileName;
-        generateTestTokenAndRefreshToken(size);
-        // 写入CSV文件
-        String filePath = "tokens_" + fileName + ".csv";
-        try (FileWriter writer = new FileWriter(filePath);
-             PrintWriter pw = new PrintWriter(writer)) {
-            // 写入CSV头
-            pw.println("token,refreshToken");
-            // 写入数据
-            for (int i = 0; i < PHONE_LIST.size(); i++) {
-                String token = TOKEN_LIST.get(i);
-                String refreshToken = REFRESHTOKEN_LIST.get(i);
-
-                pw.printf("%s,%s%n", token, refreshToken);
-            }
-            log.info("CSV file exported: {}", filePath);
-        } catch (IOException e) {
-            log.error("Failed to write CSV file", e);
-        };
-        log.info("Finished generating and exporting tokens");
-    }
 }
+
