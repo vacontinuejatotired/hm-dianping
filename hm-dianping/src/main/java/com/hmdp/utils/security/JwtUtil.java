@@ -1,4 +1,4 @@
-package com.hmdp.utils;
+package com.hmdp.utils.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
@@ -21,6 +21,9 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+/**
+ * JWT 工具类 — RSA 签名/验签、双Token生成、Claims解析
+ */
 @Slf4j
 public class JwtUtil {
 

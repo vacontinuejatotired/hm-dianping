@@ -1,13 +1,9 @@
-package com.hmdp.Enum;
+package com.hmdp.enums;
 
 import lombok.Getter;
 
 /**
- * Token刷新状态码枚举
- * 对应Lua脚本返回的状态码
- * 状态码规则：
- * 200: 成功
- * 400-499: 客户端错误
+ * Token 刷新结果枚举 — 定义刷新成功/失败的各种状态码
  */
 @Getter
 public enum TokenRefreshCode {

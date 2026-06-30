@@ -10,7 +10,7 @@ import jakarta.annotation.Resource;
 
 /**
  * <p>
- *  前端控制器
+ * 优惠券控制器 — 普通券/秒杀券CRUD、按商铺查询优惠券列表
  * </p>
  *
  * @author 虎哥

@@ -5,8 +5,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.hmdp.entity.TokenVersionCache;
 import com.hmdp.entity.UserinfoCache;
-import com.hmdp.utils.BatchLoadCache;
-import com.hmdp.utils.CaffeineConstants;
+import com.hmdp.utils.cache.BatchLoadCache;
+import com.hmdp.utils.cache.CaffeineConstants;
 import jakarta.annotation.Resource;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +20,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 多级缓存配置 — Caffeine本地缓存（用户信息、Token版本号）定义
+ */
 @Slf4j
 @Configuration
 @EnableCaching

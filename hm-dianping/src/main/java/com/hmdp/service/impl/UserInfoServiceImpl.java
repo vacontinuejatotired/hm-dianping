@@ -6,7 +6,7 @@ import com.hmdp.entity.UserInfo;
 import com.hmdp.mapper.UserInfoMapper;
 import com.hmdp.service.IUserInfoService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.utils.RegexPatterns;
+import com.hmdp.utils.constants.RegexPatterns;
 import com.hmdp.utils.RegexUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,12 +14,7 @@ import org.springframework.stereotype.Service;
 import jakarta.servlet.http.HttpSession;
 
 /**
- * <p>
- *  服务实现类
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-24
+ * 用户信息服务实现 — 用户详细信息查询
  */
 @Slf4j
 @Service

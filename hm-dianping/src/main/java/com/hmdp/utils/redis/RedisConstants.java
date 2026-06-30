@@ -1,5 +1,8 @@
-package com.hmdp.utils;
+package com.hmdp.utils.redis;
 
+/**
+ * Redis 键前缀与过期时间常量 — 统一管理所有 Redis Key 格式
+ */
 public class RedisConstants {
     public static final String LOGIN_CODE_KEY = "login:code:";
     public static final Long LOGIN_CODE_TTL = 2L;

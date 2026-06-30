@@ -6,8 +6,8 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.ITestService;
 import com.hmdp.service.IUserService;
 import com.hmdp.service.IVoucherOrderService;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.redis.RedisConstants;
+import com.hmdp.utils.redis.RedisIdWorker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.core.RedisCallback;
@@ -17,9 +17,12 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
+/**
+ * 测试工具服务实现 — 秒杀库存重置、批量生成Token、雪花ID校验
+ */
 @Service
 @Slf4j
-public class TestServiceimpl implements ITestService {
+public class TestServiceImpl implements ITestService {
     @Resource
     private IVoucherOrderService voucherOrderService;
 

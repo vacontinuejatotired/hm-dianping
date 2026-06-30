@@ -13,7 +13,12 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.*;
+import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
+import com.hmdp.utils.constants.SystemConstants;
+import com.hmdp.utils.redis.RedisConstants;
+import com.hmdp.utils.redis.RedisIdWorker;
+import com.hmdp.utils.security.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
@@ -36,12 +41,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * <p>
- * 服务实现类
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 用户服务实现 — 手机验证码登录、密码登录、签到（Redis BitMap）、双Token生成
  */
 @Slf4j
 @Service
@@ -142,7 +142,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         Map<String, String> map = new HashMap<>(3);
         map.put("token", token);
         map.put("refreshToken", refreshToken);
-        log.info("map={}", map);
+        log.info("【登录成功】userId={}, 返回响应体中的token(前20位)={}, refreshToken(前20位)={}, version={}",
+                user.getId(),
+                token.substring(0, Math.min(20, token.length())),
+                refreshToken.substring(0, Math.min(20, refreshToken.length())),
+                version);
+        log.info("【登录成功】注意: token在响应体data中返回(data.token/data.refreshToken), 前端需从响应体而非响应头中提取");
         return Result.ok(map);
     }
 

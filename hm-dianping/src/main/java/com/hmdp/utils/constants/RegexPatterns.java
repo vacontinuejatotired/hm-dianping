@@ -1,7 +1,7 @@
-package com.hmdp.utils;
+package com.hmdp.utils.constants;
 
 /**
- * @author 虎哥
+ * 正则表达式常量 — 手机号、邮箱等格式校验
  */
 public abstract class RegexPatterns {
     /**

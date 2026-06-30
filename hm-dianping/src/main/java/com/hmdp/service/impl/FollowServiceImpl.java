@@ -20,12 +20,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * <p>
- *  服务实现类
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 关注服务实现 — 关注/取关（Redis Set存储关注列表）、共同关注（Set交集运算）
  */
 @Service
 public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> implements IFollowService {

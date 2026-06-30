@@ -12,6 +12,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @author 虎哥
  * @since 2021-12-22
  */
+/**
+ * 探店笔记服务接口 — 笔记CRUD、点赞、点赞用户列表、关注者Feed流
+ */
 public interface IBlogService extends IService<Blog> {
 
     Result queryById(Long id);

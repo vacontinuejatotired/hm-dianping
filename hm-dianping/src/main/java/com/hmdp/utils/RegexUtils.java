@@ -1,9 +1,10 @@
 package com.hmdp.utils;
 
 import cn.hutool.core.util.StrUtil;
+import com.hmdp.utils.constants.RegexPatterns;
 
 /**
- * @author 虎哥
+ * 正则校验工具 — 手机号、邮箱格式校验
  */
 public class RegexUtils {
     /**

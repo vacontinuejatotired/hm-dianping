@@ -12,6 +12,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @author 虎哥
  * @since 2021-12-22
  */
+/**
+ * 秒杀订单服务接口 — 秒杀下单（Redis+Lua+Mq异步落库）
+ */
 public interface IVoucherOrderService extends IService<VoucherOrder> {
 
     Result querySeckillVoucher(Long voucherId);

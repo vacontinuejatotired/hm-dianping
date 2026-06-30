@@ -11,10 +11,10 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.utils.CacheClient;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RedisData;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.cache.CacheClient;
+import com.hmdp.utils.redis.RedisConstants;
+import com.hmdp.utils.cache.RedisData;
+import com.hmdp.utils.constants.SystemConstants;
 import io.netty.util.internal.StringUtil;
 import org.apache.tomcat.util.buf.StringUtils;
 import org.springframework.data.geo.Distance;
@@ -34,12 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * <p>
- *  服务实现类
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 商铺服务实现 — 多级缓存（Caffeine+Redis+DB）、缓存穿透/击穿/雪崩处理、按距离查询
  */
 @Service
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {

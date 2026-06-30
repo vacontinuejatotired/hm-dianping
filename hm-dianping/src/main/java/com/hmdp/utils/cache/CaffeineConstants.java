@@ -1,5 +1,8 @@
-package com.hmdp.utils;
+package com.hmdp.utils.cache;
 
+/**
+ * Caffeine 缓存常量 — 本地缓存大小、过期时间等配置
+ */
 public interface CaffeineConstants {
     String USERINFO_CACHE_KEY = "cache:userinfo:";
     Long USERINFO_CACHE_TTL_MINUTES = 20L;

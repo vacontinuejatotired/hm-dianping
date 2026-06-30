@@ -1,4 +1,4 @@
-package com.hmdp.utils;
+package com.hmdp.utils.security;
 
 
 import cn.hutool.core.util.RandomUtil;
@@ -6,6 +6,9 @@ import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * 密码编码器 — MD5 加盐加密与校验
+ */
 public class PasswordEncoder {
 
     public static String encode(String password) {

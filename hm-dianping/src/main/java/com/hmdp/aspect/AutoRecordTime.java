@@ -1,4 +1,4 @@
-package com.hmdp.interceptor.aspect;
+package com.hmdp.aspect;
 
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -8,12 +8,15 @@ import org.aspectj.lang.annotation.Pointcut;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StopWatch;
 
+/**
+ * 方法耗时记录切面 — 通过 AOP 拦截 @RecordTime 注解，打印执行耗时
+ */
 @Aspect
 @Component
 @Slf4j
 public class AutoRecordTime {
 
-    @Pointcut("@annotation(com.hmdp.interceptor.annotation.RecordTime)")
+    @Pointcut("@annotation(com.hmdp.annotation.RecordTime)")
     public void pointcut() {}
 
     @Around("pointcut()")

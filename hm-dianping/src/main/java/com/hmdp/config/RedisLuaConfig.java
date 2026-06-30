@@ -1,6 +1,6 @@
 package com.hmdp.config;
 
-import com.hmdp.utils.LockFreeRedisScript;
+import com.hmdp.utils.redis.LockFreeRedisScript;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,6 +9,9 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 import java.io.IOException;
 
+/**
+ * Redis Lua 脚本配置 — 预加载所有 Lua 脚本，避免运行时懒加载
+ */
 @Configuration
 @Slf4j
 public class RedisLuaConfig {

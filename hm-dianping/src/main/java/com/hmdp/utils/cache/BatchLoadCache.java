@@ -1,4 +1,4 @@
-package com.hmdp.utils;
+package com.hmdp.utils.cache;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
@@ -18,6 +18,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 批量缓存加载工具 — 定时异步加载用户信息到 Redis，支持空值缓存防穿透
+ */
 @Component
 @Slf4j
 public class BatchLoadCache {

@@ -15,6 +15,9 @@ import jakarta.servlet.http.HttpSession;
  * @author 虎哥
  * @since 2021-12-22
  */
+/**
+ * 用户服务接口 — 登录/注册、验证码、签到、Token生成
+ */
 public interface IUserService extends IService<User> {
 
     Result sendCode(String phone, HttpSession session);

@@ -1,4 +1,4 @@
-package com.hmdp.utils;
+package com.hmdp.utils.redis;
 
 import cn.hutool.core.util.BooleanUtil;
 import org.springframework.core.io.ClassPathResource;
@@ -11,6 +11,9 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 
+/**
+ * 简单 Redis 分布式锁实现 — 基于 SETNX + Lua 释放锁
+ */
 public class SimpleRedisLock implements ILock {
     private StringRedisTemplate redisTemplate;
     private String name;

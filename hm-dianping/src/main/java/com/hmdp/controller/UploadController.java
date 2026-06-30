@@ -3,7 +3,7 @@ package com.hmdp.controller;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import com.hmdp.dto.Result;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.constants.SystemConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -12,6 +12,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * <p>
+ * 文件上传控制器 — 博客图片上传/删除（当前存本地，TODO: 对接文件服务器）
+ * </p>
+ */
 @Slf4j
 @RestController
 @RequestMapping("upload")

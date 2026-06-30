@@ -1,13 +1,9 @@
-package com.hmdp.Enum;
+package com.hmdp.enums;
 
 import lombok.Getter;
 
 /**
- * 秒杀订单状态码枚举
- * 对应Lua脚本返回的状态码
- * 状态码规则：
- * 200: 成功
- * 500-599: 秒杀相关错误
+ * 秒杀订单结果枚举 — 定义秒杀成功/库存不足/重复下单等状态码
  */
 @Getter
 public enum SeckillOrderCode {

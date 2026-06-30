@@ -60,18 +60,19 @@
 
     <!-- ========== 依赖列表 ========== -->
     <dependencies>
+    
         <!--        spring-ai-->
-        <dependency>
+        <!-- <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
             <version>${spring-ai.version}</version>
-        </dependency>
+        </dependency> -->
         <!-- Spring AI Alibaba -->
-        <dependency>
+        <!-- <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
             <version>${spring-ai-alibaba.version}</version>
-        </dependency>
+        </dependency> -->
 
         <!-- Spring Boot Starters -->
         <dependency>

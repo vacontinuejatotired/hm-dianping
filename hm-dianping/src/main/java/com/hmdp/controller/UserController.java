@@ -18,7 +18,7 @@ import jakarta.servlet.http.HttpSession;
 
 /**
  * <p>
- * 前端控制器
+ * 用户控制器 — 注册、登录、用户信息查询、签到
  * </p>
  *
  * @author 虎哥

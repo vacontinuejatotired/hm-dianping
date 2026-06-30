@@ -1,10 +1,11 @@
-package com.hmdp.utils;
+package com.hmdp.utils.cache;
 
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.hmdp.entity.Shop;
+import com.hmdp.utils.redis.RedisConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.annotations.Select;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -16,6 +17,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+/**
+ * 缓存客户端工具 — 封装 Redis 缓存操作，提供缓存穿透/击穿解决方案
+ */
 @Slf4j
 @Component
 public class CacheClient {

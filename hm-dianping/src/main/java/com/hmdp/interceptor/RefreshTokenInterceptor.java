@@ -4,11 +4,16 @@ import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.hmdp.Enum.TokenRefreshCode;
+import com.hmdp.enums.TokenRefreshCode;
 import com.hmdp.entity.TokenVersionCache;
 import com.hmdp.entity.UserinfoCache;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.*;
+import com.hmdp.utils.UserHolder;
+import com.hmdp.utils.cache.BatchLoadCache;
+import com.hmdp.utils.cache.CaffeineConstants;
+import com.hmdp.utils.redis.RedisConstants;
+import com.hmdp.utils.redis.RedisIdWorker;
+import com.hmdp.utils.security.JwtUtil;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +31,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Token 自动续期间拦截器 — 双Token校验、过期刷新、版本号校验、Caffeine两级验证
+ * 优先级高于 LoginInterceptor，拦截所有请求（除公开接口）
+ */
 @Slf4j
 @Component
 public class RefreshTokenInterceptor implements HandlerInterceptor {
@@ -53,11 +62,13 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         long methodStartTime = System.currentTimeMillis();
         String requestURI = request.getRequestURI();
+        String method = request.getMethod();
 
         try {
-            log.info("拦截路径 {}", request.getRequestURI());
+            log.info("【Token拦截】请求路径 {} {}", method, requestURI);
 
             if (!checkTokenHeader(request, response)) {
+                log.warn("【Token拦截】缺少请求头返回401, URI={} {}", method, requestURI);
                 return false;
             }
 
@@ -66,21 +77,22 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
             response.setHeader("authorization", token);
             response.setHeader("Refresh-Token", refreshToken);
-
             try {
                 Claims claims = jwtUtil.valiateAndGetClaimFromToken(token);
                 return tryRefreshIfNeeded(request, response, claims, token, refreshToken);
             } catch (ExpiredJwtException e) {
+                log.info("【Token拦截】JWT已过期，尝试刷新, URI={}", requestURI);
                 return refreshExpiredToken(request, response, e);
             } catch (Exception e) {
-                log.error(e.getMessage());
+                log.error("【Token拦截】JWT校验异常, URI={}, error={}", requestURI, e.getMessage());
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                log.warn("【Token拦截】JWT校验失败返回401, URI={} {}", method, requestURI);
                 return false;
             }
         } finally {
             long totalTime = System.currentTimeMillis() - methodStartTime;
             if (totalTime > 100) {
-                log.warn("【性能告警】preHandle处理耗时过长: {} ms, URI: {}", totalTime, requestURI);
+                log.warn("【性能告警】preHandle处理耗时过长: {} ms, URI: {} {}", totalTime, method, requestURI);
             }
         }
     }
@@ -91,13 +103,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
      */
     private boolean checkTokenHeader(HttpServletRequest request, HttpServletResponse response) {
         String token = request.getHeader("authorization");
+        String requestURI = request.getRequestURI();
         if (token == null) {
-            log.info("token is null");
+            log.info("token is null, URI={}", requestURI);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
         if (request.getHeader("Refresh-Token") == null) {
-            log.info("Refresh-Token is null");
+            log.info("Refresh-Token is null, URI={}", requestURI);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
@@ -136,12 +149,12 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String versionKey = RedisConstants.LOGIN_VALID_VERSION_KEY + userId;
         String redisVersion = stringRedisTemplate.opsForValue().get(versionKey);
         if (redisVersion == null) {
-            log.info("Redis中版本号不存在，userId: {}", userId);
+            log.info("Redis中版本号不存在，userId: {}, versionKey: {}", userId, versionKey);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
         if (Long.parseLong(redisVersion) > versionFromToken) {
-            log.info("Redis版本校验不通过，userId: {}, Redis版本: {}, token版本: {}", userId, redisVersion, versionFromToken);
+            log.warn("Redis版本校验不通过，userId: {}, Redis版本: {}, token版本: {}, 说明该token已被后续登录/刷新覆盖", userId, redisVersion, versionFromToken);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
@@ -421,6 +434,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
         UserHolder.remove();
-        log.info("用户信息已清除");
+        log.debug("用户信息已清除, URI={}", request.getRequestURI());
     }
 }

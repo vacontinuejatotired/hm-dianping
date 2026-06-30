@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Redisson 配置 — 分布式锁客户端
+ */
 @Configuration
 public class RedissonConfig {
     @Value(value = "${spring.data.redis.host}")

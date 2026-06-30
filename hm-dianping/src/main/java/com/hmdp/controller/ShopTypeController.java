@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * <p>
- * 前端控制器
+ * 商铺类型控制器 — 获取商铺分类列表（首页顶部Tab）
  * </p>
  *
  * @author 虎哥

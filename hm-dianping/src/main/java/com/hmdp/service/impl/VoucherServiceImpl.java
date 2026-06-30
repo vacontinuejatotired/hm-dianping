@@ -15,12 +15,7 @@ import jakarta.annotation.Resource;
 import java.util.List;
 
 /**
- * <p>
- * 服务实现类
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 优惠券服务实现 — 普通券/秒杀券CRUD，按商铺查询优惠券列表
  */
 @Service
 public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> implements IVoucherService {

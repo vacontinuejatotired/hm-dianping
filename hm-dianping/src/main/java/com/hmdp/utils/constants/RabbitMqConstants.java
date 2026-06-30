@@ -1,5 +1,8 @@
-package com.hmdp.utils;
+package com.hmdp.utils.constants;
 
+/**
+ * RabbitMQ 常量 — 队列/交换器/路由键定义
+ */
 public class RabbitMqConstants {
     public static final String QUEUE_NAME = "voucher_order";
     public static final String DEAD_QUEUE_NAME = "dead_voucher_order";

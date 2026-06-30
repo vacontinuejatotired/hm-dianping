@@ -1,8 +1,9 @@
-package com.hmdp.utils;
+package com.hmdp.utils.redis;
 
 import cn.hutool.core.util.RandomUtil;
 import com.esotericsoftware.minlog.Log;
 import com.hmdp.entity.SnowflakeIdQueue;
+import com.hmdp.utils.UserHolder;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Redis 分布式 ID 生成器 — 雪花算法 + ID预生成队列，避免高并发ID生成延迟
+ */
 @Component
 @Slf4j
 public class RedisIdWorker {

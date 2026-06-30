@@ -1,11 +1,11 @@
-package com.hmdp.utils;
+package com.hmdp.utils.redis;
 
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.util.DigestUtils;
 
 
 /**
- * 自定义的LockFreeRedisScript类，继承自DefaultRedisScript，并重写getSha1方法以实现无锁的Lua脚本执行。
+ * 无锁 RedisScript 实现 — 重写 getSha1() 预计算 SHA1，避免高并发下 synchronized 锁竞争
  */
 public class LockFreeRedisScript extends DefaultRedisScript {
     private final String cacheSha1;

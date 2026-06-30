@@ -4,7 +4,7 @@
  import com.fasterxml.jackson.databind.SerializationFeature;
  import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
  import com.hmdp.entity.VoucherOrder;
- import com.hmdp.utils.RabbitMqConstants;
+ import com.hmdp.utils.constants.RabbitMqConstants;
  import org.springframework.amqp.core.*;
  import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
  import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
@@ -23,6 +23,9 @@
  import java.util.Map;
 
 
+/**
+ * RabbitMQ 配置 — 正常队列/死信队列/备用交换器声明，可靠投递回调
+ */
  @Configuration
  public class RabbitConfig {
 

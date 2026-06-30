@@ -1,4 +1,4 @@
-package com.hmdp.utils;
+package com.hmdp.utils.cache;
 
 
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -9,6 +9,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 
+/**
+ * 缓存监控工具 — 多级缓存命中率统计与监控
+ */
 @Component
 public class CacheMonitor {
 
