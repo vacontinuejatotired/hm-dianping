@@ -78,7 +78,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             response.setHeader("authorization", token);
             response.setHeader("Refresh-Token", refreshToken);
             try {
-                Claims claims = jwtUtil.valiateAndGetClaimFromToken(token);
+                Claims claims = jwtUtil.validateAndGetClaimFromToken(token);
                 return tryRefreshIfNeeded(request, response, claims, token, refreshToken);
             } catch (ExpiredJwtException e) {
                 log.info("【Token拦截】JWT已过期，尝试刷新, URI={}", requestURI);
@@ -98,7 +98,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 校验请求头中 token 和 Refresh-Token 是否都存在
+     * 校验请求头中 authorization 是否存在
+     * Refresh-Token 仅在需要刷新时才读取，不在此处强制校验
      * 任一为空则直接返回 false
      */
     private boolean checkTokenHeader(HttpServletRequest request, HttpServletResponse response) {
@@ -106,11 +107,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         if (token == null) {
             log.info("token is null, URI={}", requestURI);
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return false;
-        }
-        if (request.getHeader("Refresh-Token") == null) {
-            log.info("Refresh-Token is null, URI={}", requestURI);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;
         }
@@ -162,9 +158,9 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
         Date expiration = claims.getExpiration();
         long timeToExpire = expiration.getTime() - System.currentTimeMillis();
-        long remaningTime = RandomUtil.randomLong(5L, 10L) * 60 * 1000;
+        long remainingTime = RandomUtil.randomLong(5L, 10L) * 60 * 1000;
 
-        if (timeToExpire < remaningTime && timeToExpire > 0) {
+        if (timeToExpire < remainingTime && timeToExpire > 0) {
             log.info("token has close deadline");
             return refreshDeadlineToken(request, response, token, clientRefreshToken, versionFromToken, userId);
         }
