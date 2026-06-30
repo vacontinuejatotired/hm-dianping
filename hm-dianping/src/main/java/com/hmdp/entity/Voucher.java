@@ -12,12 +12,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 优惠券实体 — 普通券/秒杀券，含支付金额、抵扣金额、关联店铺
+ * stock/beginTime/endTime 为秒杀券时从 tb_seckill_voucher 关联查询填充
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

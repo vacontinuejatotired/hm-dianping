@@ -4,12 +4,7 @@ import com.hmdp.entity.BlogComments;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
- * <p>
- *  Mapper 接口
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 博客评论 Mapper — MyBatis-Plus 基础 CRUD
  */
 public interface BlogCommentsMapper extends BaseMapper<BlogComments> {
 

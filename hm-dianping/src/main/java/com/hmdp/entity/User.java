@@ -11,12 +11,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 用户实体 — 核心认证实体，含手机号、密码、昵称、头像
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

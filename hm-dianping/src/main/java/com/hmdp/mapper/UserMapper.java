@@ -6,12 +6,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 /**
- * <p>
- *  Mapper 接口
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 用户 Mapper — MyBatis-Plus 基础 CRUD + 自定义 XML 查询
  */
 public interface UserMapper extends BaseMapper<User> {
 

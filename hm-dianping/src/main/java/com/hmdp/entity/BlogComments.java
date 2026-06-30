@@ -11,12 +11,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 博客评论实体 — 支持多级评论（parentId=0为一级评论）
+ * 注意：该模块后台接口尚未实现
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

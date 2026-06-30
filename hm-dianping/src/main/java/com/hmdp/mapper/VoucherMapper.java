@@ -7,12 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * <p>
- *  Mapper 接口
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 优惠券 Mapper — MyBatis-Plus 基础 CRUD + 优惠券+秒杀券关联查询
  */
 public interface VoucherMapper extends BaseMapper<Voucher> {
 

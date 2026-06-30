@@ -11,12 +11,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 秒杀订单实体 — 记录用户秒杀下单信息（支付方式、订单状态、各时间节点）
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
