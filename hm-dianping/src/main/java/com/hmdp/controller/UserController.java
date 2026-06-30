@@ -4,16 +4,21 @@ package com.hmdp.controller;
 import cn.hutool.core.bean.BeanUtil;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.TokenPair;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.entity.UserInfo;
 import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
+import com.hmdp.utils.cache.CacheClient;
+import com.hmdp.utils.redis.RedisConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
@@ -33,6 +38,8 @@ public class UserController {
 
     @Resource
     private IUserInfoService userInfoService;
+    @Resource
+    private CacheClient cacheClient;
 
     /**
      * 发送手机验证码
@@ -43,12 +50,16 @@ public class UserController {
     }
 
     /**
-     * 登录功能
+     * 登录功能 — Token 通过响应头返回（authorization + Refresh-Token）
      * @param loginForm 登录参数，包含手机号、验证码；或者手机号、密码
+     * @param response 用于写回 Token 响应头
      */
     @PostMapping("/login")
-    public Result login(@RequestBody LoginFormDTO loginForm){
-        return userService.login(loginForm);
+    public Result login(@RequestBody LoginFormDTO loginForm, HttpServletResponse response){
+        TokenPair tokenPair = userService.login(loginForm);
+        response.setHeader("authorization", tokenPair.getAccessToken());
+        response.setHeader("Refresh-Token", tokenPair.getRefreshToken());
+        return Result.ok();
     }
 
     /**
@@ -69,17 +80,29 @@ public class UserController {
 
     @GetMapping("/{id}")
     public Result queryUserById(@PathVariable("id") Long userId){
-        // 查询详情
-        User user = userService.getById(userId);
+        // 权限校验：只能查自己的信息
+        Long currentUserId = UserHolder.getUserId();
+        if (!currentUserId.equals(userId)) {
+            log.warn("越权访问: currentUserId={}, targetUserId={}", currentUserId, userId);
+            return Result.fail("无权访问该用户信息");
+        }
+        // 缓存查询（缓存穿透防护）
+        User user = cacheClient.queryById(userId, User.class, "cache:user:",
+                id -> userService.getById(id), 30L, TimeUnit.MINUTES);
         if (user == null) {
             return Result.ok();
         }
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
-        // 返回
         return Result.ok(userDTO);
     }
     @GetMapping("/info/{id}")
     public Result info(@PathVariable("id") Long userId){
+        // 权限校验：只能查自己的详细信息
+        Long currentUserId = UserHolder.getUserId();
+        if (!currentUserId.equals(userId)) {
+            log.warn("越权访问详情: currentUserId={}, targetUserId={}", currentUserId, userId);
+            return Result.fail("无权访问该用户详细信息");
+        }
         // 查询详情
         UserInfo info = userInfoService.getById(userId);
         if (info == null) {
