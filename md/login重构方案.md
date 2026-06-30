@@ -1,6 +1,6 @@
-# Login 模块重构方案（v2）
+# Login 模块重构方案（v3）
 
-> 本文档基于现有代码逐行分析，给出可落地的分阶段重构计划。
+> 本文档基于现有代码逐行分析 + 架构审查反馈，给出可落地的分阶段重构计划。
 >
 > 最后更新：2026-06
 
@@ -41,14 +41,14 @@
 | 步骤 | 代码行 | 职责 | 问题 |
 |------|--------|------|------|
 | ① | 70-74 | 手机号格式校验 | 应前置在 Controller 或 DTO 校验 |
-| ② | 75-78 | 从 Redis 取验证码并比对 | 正常 |
+| ② | 75-78 | 从 Redis 取验证码并比对 | ⚠️ **没删除验证码，可重复使用** |
 | ③ | 80-95 | 查用户 → 不存在则自动创建 | 创建用户不应放在登录方法中 |
 | ④ | 96 | 用雪花ID生成 version | 属于 Token 生成流程 |
 | ⑤ | 97 | JWT 签名生成 AccessToken | 属于 Token 生成流程 |
 | ⑥ | 98-108 | 用户信息写入 Redis Hash | 属于用户缓存逻辑 |
 | ⑦ | 110-117 | 组装 Lua 参数列表 | 属于 Token 存储逻辑 |
-| ⑧ | 118-141 | 执行 Lua 脚本写入 Redis | 属于 Token 存储逻辑 |
-| ⑨ | 142-151 | 组装返回 Map | 属于 Controller 层 |
+| ⑧ | 118-141 | 执行 Lua 脚本写入 Redis | ⚠️ **Lua 返回异常静默吞掉，未返回错误** |
+| ⑨ | 142-151 | 组装返回 Map | Token 通过**响应体**返回，与拦截器不一致 |
 
 ### 1.3 Token 传递方式不统一
 
@@ -77,208 +77,150 @@
 | `HttpSession` 未使用 | Controller/Service | 项目早已全面 Token 化，session 参数是遗留物 |
 | `logout` 空实现 | Controller | 返回 `"功能未完成"` |
 | 密码登录未实现 | LoginFormDTO/Service | `password` 字段存在但 Service 从不使用 |
-| `GET /user/{id}` 无缓存 | Controller | 直接 MP getById()，其他模块均有缓存 |
-| `AuditServiceImpl`/`AiService` 被注释 | service/ | 整个文件被注释掉，dead code |
+| `GET /user/{id}` 无缓存+无权限 | Controller | 任何人都可遍历 userId，且无缓存 |
+| `GET /user/info/{id}` 无权限 | Controller | 返回敏感字段（生日、性别），无权限控制 |
+| 验证码可重复使用 | login() | GET 后没 DEL，同一验证码可多次登录 |
+| 验证码发送无频率限制 | sendCode() | 可被脚本无限调用 |
+| 拼写错误 | 多处 | `remaningTime`, `valiateAndGetClaimFromToken`, `fileName = fileName;` |
 | 拦截器 20000+ 字节 | RefreshTokenInterceptor | Token 校验+刷新+缓存+日志全部内联 |
-| LoginSetToken.lua 逻辑重复 | 测试代码 | 测试方法中又用 Pipeline 重写了一遍 Lua 的逻辑 |
+| Caffeine `get()` 阻塞 | 拦截器 | 使用 `get()` 而非 `getIfPresent()`，Redis 抖动时会同步穿透 |
 
 ---
 
 ## 2. 目标架构
 
-### 2.1 新增 AuthService 层
-
-将认证逻辑从 `UserServiceImpl` 和 `RefreshTokenInterceptor` 中抽离：
+### 2.1 新增 AuthService + AuthController
 
 ```
-┌─ UserController ──────┐    ┌─ AuthController (可选拆分) ─┐
-│  /user/login          │    │  /auth/login                │
-│  /user/logout         │    │  /auth/refresh              │
-│  /user/code           │    │  /auth/logout               │
-│  /user/me             │    │                             │
-│  /user/{id}           │    └──────────┬──────────────────┘
-│  /user/info/{id}      │               │
-│  /user/sign           │               │
-│  /user/sign/count     │               │
-└──────────┬────────────┘               │
-           │                            │
-           ▼                            ▼
-┌─ UserServiceImpl ────┐    ┌─ AuthServiceImpl ────────────┐
-│  用户创建/查询        │    │  generateTokenPair()         │
-│  签到                 │    │  validateAccessToken()       │
-│  发送验证码            │    │  refreshTokenPair()          │
-│                      │    │  revokeTokens()              │  ← logout
-│                      │    │  sendVerifyCode()            │
-└──────────────────────┘    └──────────┬──────────────────┘
-                                       │
-                                       ▼
-                            ┌─ JwtUtil ────────────┐
-                            │  sign/verify          │
-                            │  RSA key pair         │
-                            └──────────────────────┘
+┌─ AuthController (新增) ──┐    ┌─ UserController ──────────┐
+│  POST /auth/login        │    │  POST /user/code          │
+│  POST /auth/refresh      │    │  GET  /user/me            │
+│  POST /auth/logout       │    │  GET  /user/{id}          │
+└──────────┬───────────────┘    │  GET  /user/info/{id}    │
+           │                    │  POST /user/sign          │
+           │                    │  GET  /user/sign/count    │
+           │                    └───────────────────────────┘
+           ▼
+┌─ AuthServiceImpl (新增) ──────────────────────────────────┐
+│  generateTokenPair(userId)    → TokenPair                 │
+│  validateAccessToken(token)   → ValidationResult          │
+│  refreshTokenPair(refresh)    → TokenPair                 │
+│  revokeTokens(userId)         → void     ← logout         │
+│  consumeVerifyCode(phone,code)→ boolean  ← 原子 GET+DEL   │
+└───────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 数据流（理想态）
-
-```
-POST /user/login { phone, code }
-  │
-  ├─ ① Controller: 参数校验（@Valid）
-  ├─ ② UserService: 根据手机号查/创建用户
-  ├─ ③ AuthService: generateTokenPair(userId)
-  │     ├─ RedisIdWorker.nextVersion()
-  │     ├─ JwtUtil.generateToken(access)
-  │     ├─ UUID (refreshToken)
-  │     └─ Redis Lua: 原子写入 token+version+refreshToken
-  ├─ ④ AuthService: 将用户信息缓存到 Redis (userinfo map)
-  └─ ⑤ Controller: 响应头写回 Token（与后续请求一致）
-```
-
----
-
-## 3. 分阶段实施计划
-
-### Phase 0 — 立即清理（低风险，可并行）
-
-| # | 操作 | 文件 | 说明 |
-|---|------|------|------|
-| 0.1 | 移除 `HttpSession` 参数 | UserController + IUserService + UserServiceImpl | 搜索 `HttpSession session`，全部删除 |
-| 0.2 | 移除 `import javax.servlet.http.HttpSession` | UserController + IUserService + UserServiceImpl | 连带清理 |
-| 0.3 | 删除被注释的 AiService / AiServiceImpl | service/AiService.java + impl/AiServiceImpl.java | 整文件删除 |
-| 0.4 | 删除被注释的 VoucherOrderServiceImpl | service/impl/VoucherOrderServiceImpl.java | 整文件删除，已有 MqVoucherOrderServiceImpl |
-
-### Phase 1 — 测试代码剥离
-
-**目标**：将测试工具方法移出生产 Service
-
-| # | 操作 | 说明 |
-|---|------|------|
-| 1.1 | 新建 `util/TokenTestUtil.java` | 将 `TOKEN_LIST`, `PHONE_LIST`, `REFRESHTOKEN_LIST`, `generateTestTokenAndRefreshToken()`, `exportTokenAndRefreshTokenToCsv()`, `generateTestPhone()`, `getTokenList()`, `getPhoneList()` 全部移入 |
-| 1.2 | `IUserService` 移除 `exportTokenAndRefreshTokenToCsv()` | 接口只保留生产方法 |
-| 1.3 | `UserServiceImpl` 删除上述静态变量和方法 | 清理约 200 行 |
-| 1.4 | 更新 `TestServiceImpl` 中对 `exportTokenAndRefreshTokenToCsv` 的调用 | 改为调用 `TokenTestUtil` |
-
-### Phase 2 — 抽取 AuthService
-
-**目标**：创建独立的认证服务层，减少 UserServiceImpl 和拦截器负担
-
-#### 2.1 新建 domain 类
+### 2.2 AuthService 接口定义
 
 ```java
-// dto/TokenPair.java
-@Data
-@AllArgsConstructor
+// 新增 DTO
 public class TokenPair {
     private String accessToken;
     private String refreshToken;
     private Long version;
 }
 
-// dto/TokenValidationResult.java
-@Data
-public class TokenValidationResult {
+public class ValidationResult {
     private boolean valid;
     private Long userId;
     private Long version;
-    private boolean needsRefresh;  // 临期需要刷新
+    private boolean needsRefresh;
 }
-```
 
-#### 2.2 新建 AuthService
-
-```java
-// service/AuthService.java
+// 新增接口
 public interface AuthService {
-    /** 登录时生成双Token + version，写入 Redis（Lua 原子操作） */
-    TokenPair generateTokenPair(Long userId);
+    /** 登录：生成双Token + version，通过响应头写回 */
+    TokenPair generateTokenPair(Long userId, HttpServletResponse response);
 
-    /** 校验 Access Token，返回解码结果 */
-    TokenValidationResult validateAccessToken(String token);
+    /** 校验 Access Token + 版本号 */
+    ValidationResult validateAccessToken(String token);
 
-    /** 临期刷新：双Token + version 全部更新 */
-    TokenPair refreshByDeadline(String oldAccessToken, String refreshToken, Long oldVersion, Long userId);
+    /** 刷新双Token（临期或过期） */
+    TokenPair refreshTokenPair(String refreshToken, HttpServletResponse response);
 
-    /** 过期刷新：用 RefreshToken 换取新双Token */
-    TokenPair refreshByExpired(String expiredAccessToken, String refreshToken);
-
-    /** 登出：删除 Redis 中该用户的所有 Token/Version 记录 */
+    /** 登出：删除 Redis 中该用户的所有 Token/Version */
     void revokeTokens(Long userId);
+
+    /** 原子消费验证码：GET + DEL，防止重放 */
+    boolean consumeVerifyCode(String phone, String code);
 
     /** 缓存用户信息到 Redis Hash */
     void cacheUserInfo(UserDTO userDTO);
 }
 ```
 
-#### 2.3 Service 职责重新分配
-
-```
-UserServiceImpl 保留:              AuthServiceImpl 新承担:
-├── sendCode()                     ├── generateTokenPair()
-├── login() → 简化为:               ├── validateAccessToken()
-│   ① 校验手机号                    ├── refreshByDeadline()
-│   ② 校验验证码                    ├── refreshByExpired()
-│   ③ 查/创建用户                   ├── revokeTokens()
-│   ④ 调 AuthService 生成 Token     └── cacheUserInfo()
-│   ⑤ 返回 Token                   └── (接管 LoginSetToken.lua 调用)
-├── sign()
-├── getSignCount()
-```
-
-#### 2.4 拦截器改造
+### 2.3 拦截器目标形态
 
 ```
 RefreshTokenInterceptor (瘦身):
   preHandle() {
-    ① checkTokenHeader()              ← 保留
-    ② AuthService.validateAccessToken()   ← 替代内联JWT解析+版本校验
-    ③ if (临期) AuthService.refreshByDeadline()  ← 替代内联Lua调用
+    ① checkTokenHeader()
+    ② AuthService.validateAccessToken(token)
+          ├─ JWT 解码 + 版本提取
+          ├─ Caffeine 快速拒绝 (getIfPresent, 不阻塞)
+          └─ Redis 最终校验
+    ③ if (临期/过期) AuthService.refreshTokenPair(refreshToken, response)
     ④ 设置 UserHolder
-    ⑤ 响应头写回 Token
+    ⑤ 响应头写回 accessToken / refreshToken
   }
-
-  移除：refreshExpiredToken()         → AuthService.refreshByExpired()
-  移除：refreshDeadlineToken()        → AuthService.refreshByDeadline()
-  移除：validateLocalVersionCache()   → AuthService 内部
-  移除：updateLocalVersionCache()     → AuthService 内部
-  移除：resolveAndSaveUser()          → AuthService.validateAccessToken()
+  // 性能日志交给 @RecordTime 切面
 ```
 
-### Phase 3 — Controller 层增强
+---
+
+## 3. 分阶段实施计划
+
+### Phase 0 — 紧急修复（安全漏洞，立即执行）
+
+| # | 操作 | 文件 | 风险/收益 |
+|---|------|------|-----------|
+| 0.1 | **实现 logout**：删除 Redis 中 accessToken + refreshToken + version 三个 key | UserController + UserServiceImpl | 🔴 关掉最高危漏洞，10 分钟 |
+| 0.2 | **验证码原子消费**：新建 Lua 脚本 `ConsumeVerifyCode.lua`，GET + DEL 原子执行，防止同一验证码重复登录 | UserServiceImpl + `resources/ConsumeVerifyCode.lua` | 🔴 关掉重放攻击，30 分钟 |
+| 0.3 | **验证码发送频率限制**：同一手机号 60 秒内不得重复发送 | UserServiceImpl.sendCode() | 🟠 防止短信接口滥用 |
+| 0.4 | **移除 HttpSession**：搜索 `HttpSession session`，全部删除 | UserController + IUserService + UserServiceImpl | 清理遗留参数 |
+| 0.5 | **删除被注释的 Dead Code**：AiService, AiServiceImpl, VoucherOrderServiceImpl | service/ + impl/ | 清理死代码 |
+| 0.6 | **修复拼写错误** | RefreshTokenInterceptor:165 `remaningTime`→`remainingTime`；JwtUtil:181 `valiateAndGetClaimFromToken`→`validateAndGetClaimFromToken`；UserServiceImpl:403 `fileName = fileName;` 删除 | 消除编译警告 |
+
+### Phase 1 — 测试代码剥离 + Token 约定统一
 
 | # | 操作 | 说明 |
 |---|------|------|
-| 3.1 | 实现 `logout()` | Controller 调 AuthService.revokeTokens()，然后清除 UserHolder |
-| 3.2 | `GET /user/{id}` 增加缓存 | 参考 ShopServiceImpl 的 CacheClient 模式 |
-| 3.3 | 实现密码登录 | 在 login() 中增加 `password` 分支：密码加密存入 `tb_user.password`，登录时比对 |
-| 3.4 | 可选：拆分为 AuthController | `/auth/login`, `/auth/refresh`, `/auth/logout` 独立控制器 |
+| 1.1 | 新建 `utils/TokenTestUtil.java` | 迁移 `TOKEN_LIST`, `PHONE_LIST`, `REFRESHTOKEN_LIST`, 所有测试方法 |
+| 1.2 | `IUserService` 移除 `exportTokenAndRefreshTokenToCsv()` | 接口只保留生产方法 |
+| 1.3 | `UserServiceImpl` 删除测试代码 | 清理约 200 行 |
+| 1.4 | 更新 `TestServiceImpl` 调用 | 改为调用 `TokenTestUtil` |
+| 1.5 | **统一 Token 约定**：登录接口改为通过**响应头**返回 Token | UserController.login() + UserServiceImpl.login() 改为 `response.setHeader("authorization", token)` + `response.setHeader("Refresh-Token", refreshToken)`，**不再通过响应体返回** |
+| 1.6 | 同步更新 `前端开发文档.md` | Token 获取方式改为 `response.headers.get('authorization')` |
 
-### Phase 4 — 统一 Token 传递约定
+### Phase 2 — 抽取 AuthService
 
-**目标**：消除响应体/响应头的不一致
+| # | 操作 | 文件 | 说明 |
+|---|------|------|------|
+| 2.1 | 新建 `dto/TokenPair.java` | dto/ | 含 accessToken, refreshToken, version |
+| 2.2 | 新建 `dto/ValidationResult.java` | dto/ | 含 valid, userId, version, needsRefresh |
+| 2.3 | 新建 `service/AuthService.java` | service/ | 接口定义（5 个方法） |
+| 2.4 | 新建 `service/impl/AuthServiceImpl.java` | service/impl/ | 实现 Token 生成/校验/刷新/验证码消费/用户缓存 |
+| 2.5 | 修改 `UserServiceImpl.login()` | UserServiceImpl | 简化为：①校验手机号→②消费验证码→③查/创建用户→④调 AuthService.generateTokenPair()→⑤返回 |
+| 2.6 | **修复 Lua JSON 解析** | AuthServiceImpl | Lua 返回 null 或 code != 1 时返回错误，不静默吞掉 |
+| 2.7 | **Caffeine 改为 getIfPresent** | RefreshTokenInterceptor | 避免 Redis 抖动时同步阻塞 Tomcat 线程 |
 
-**方案一（推荐）**：全员走响应头
-
-| 场景 | 改为 |
-|------|------|
-| 登录成功 | `response.setHeader("authorization", token)` + `response.setHeader("Refresh-Token", refreshToken)` |
-| 前端读取 | 统一从 `response.headers['authorization']` 读取 |
-| 好处 | 与拦截器的刷新逻辑完全一致，前端只需一套读取逻辑 |
-
-**方案二（备选）**：全员走响应体
-
-| 场景 | 改为 |
-|------|------|
-| 刷新后返回新 Token | 拦截器将新 Token 写入请求 attribute，由 Controller/Filter 写入响应体 |
-| 好处 | 前端 fetch 逻辑统一，读取 `.data.token` |
-| 代价 | 需要新增一个后置处理组件来写响应体 |
-
-### Phase 5 — 拦截器瘦身 + 日志分离
+### Phase 3 — 权限 + 缓存增强
 
 | # | 操作 | 说明 |
 |---|------|------|
-| 5.1 | `preHandle` 中的性能日志移入 `@RecordTime` 切面 | already have the annotation |
-| 5.2 | Token 解析+校验全部委托给 `AuthService` | 拦截器只做编排 |
-| 5.3 | 响应头写回逻辑可封装为工具方法 | 减少重复 |
+| 3.1 | `GET /user/{id}` 增加权限校验 | 仅当前登录用户（`UserHolder.getUserId() == id`）可查，否则 403 |
+| 3.2 | `GET /user/info/{id}` 增加权限校验 | 同上，保护 `gender`, `birthday` 等敏感字段 |
+| 3.3 | `GET /user/{id}` 增加缓存 | 参考 ShopServiceImpl 的 CacheClient 模式，减少数据库查询 |
+| 3.4 | 实现密码登录 | `password` 字段逻辑：注册时 bcrypt 加密存入，登录时比对 |
+
+### Phase 4 — 拦截器瘦身
+
+| # | 操作 | 说明 |
+|---|------|------|
+| 4.1 | Token 解析+版本校验委托给 `AuthService.validateAccessToken()` | 替代内联 JWT 解析 + 两级缓存校验逻辑 |
+| 4.2 | 刷新逻辑委托给 `AuthService.refreshTokenPair()` | 替代 `refreshDeadlineToken()` + `refreshExpiredToken()` |
+| 4.3 | 性能日志移入 `@RecordTime` 切面 | 已有注解，拦截器 finally 块中移除 |
+| 4.4 | 响应头写回封装为工具方法 | `AuthService.writeTokensToResponse(response, tokenPair)` |
 
 ---
 
@@ -289,29 +231,32 @@ RefreshTokenInterceptor (瘦身):
 | 🆕 新建 | `service/AuthService.java` | P2 |
 | 🆕 新建 | `service/impl/AuthServiceImpl.java` | P2 |
 | 🆕 新建 | `dto/TokenPair.java` | P2 |
-| 🆕 新建 | `dto/TokenValidationResult.java` | P2 |
+| 🆕 新建 | `dto/ValidationResult.java` | P2 |
 | 🆕 新建 | `utils/TokenTestUtil.java` | P1 |
-| ✏️ 修改 | `service/impl/UserServiceImpl.java` | P0-P3 |
+| 🆕 新建 | `resources/ConsumeVerifyCode.lua` | P0 |
+| ✏️ 修改 | `controller/UserController.java` | P0/P1/P3 |
 | ✏️ 修改 | `service/IUserService.java` | P1 |
-| ✏️ 修改 | `controller/UserController.java` | P0/P3 |
-| ✏️ 修改 | `interceptor/RefreshTokenInterceptor.java` | P2/P5 |
-| ✏️ 修改 | `config/MvcConfig.java` | P3 (若拆 AuthController) |
+| ✏️ 修改 | `service/impl/UserServiceImpl.java` | P0/P1/P2 |
+| ✏️ 修改 | `interceptor/RefreshTokenInterceptor.java` | P2/P4 |
+| ✏️ 修改 | `interceptor/LoginInterceptor.java` | 不改 |
+| ✏️ 修改 | `config/MvcConfig.java` | 不改 |
+| ✏️ 修改 | `utils/security/JwtUtil.java` | P0（修拼写） |
+| ✏️ 修改 | `md/前端开发文档.md` | P1（同步 Token 约定） |
 | 🗑️ 删除 | `service/AiService.java` | P0 |
 | 🗑️ 删除 | `service/impl/AiServiceImpl.java` | P0 |
 | 🗑️ 删除 | `service/impl/VoucherOrderServiceImpl.java` | P0 |
 
 ---
 
-## 5. 预计工作量
+## 5. 优先级与工作量
 
-| Phase | 内容 | 文件数 | 预估时间 | 风险 |
-|-------|------|--------|---------|------|
-| P0 | 清理 + 删除 dead code | 6 | 15min | 极低 |
-| P1 | 剥离测试代码 | 3 | 30min | 低 |
-| P2 | 抽取 AuthService（核心） | 6 | 2-3h | 中（需仔细迁移 Token 逻辑） |
-| P3 | Controller 增强 | 3 | 1-2h | 低 |
-| P4 | 统一 Token 约定 | 2 | 30min | 中（需前端配合） |
-| P5 | 拦截器瘦身 | 2 | 1h | 低 |
+```
+Phase 0 ─── 紧急安全修复 ─── 6个子任务 ─── 约 1.5h ─── 🔴 立即执行
+Phase 1 ─── 测试剥离+Token统一   6个子任务 ─── 约 1h  ─── 🟡 与P0可并行
+Phase 2 ─── AuthService抽取      7个子任务 ─── 约 3h  ─── 🟡 核心重构
+Phase 3 ─── 权限+缓存增强        4个子任务 ─── 约 2h  ─── 🟢 后续优化
+Phase 4 ─── 拦截器瘦身           4个子任务 ─── 约 1h  ─── 🟢 后续优化
+```
 
 ---
 
@@ -319,28 +264,83 @@ RefreshTokenInterceptor (瘦身):
 
 | Phase | 验收方式 |
 |-------|---------|
-| P0 | `mvn compile` 通过，无 HttpSession 引用 |
-| P1 | 生产 Service 无 `TOKEN_LIST` 等测试代码，测试工具类可正常调用 |
-| P2 | `AuthService` 独立完成 Token 生成/校验，原有登录/刷新流程功能不变 |
-| P3 | `POST /user/logout` 返回成功，之后原 Token 请求返回 401 |
-| P4 | 登录接口返回头中携带 `authorization` 和 `Refresh-Token` |
-| P5 | 拦截器减负，`@RecordTime` 切面接管耗时日志 |
+| P0 | ✅ `POST /user/logout` 返回成功，原 Token 请求返回 401 |
+| P0 | ✅ 同一验证码只能使用一次，第二次返回"验证码错误" |
+| P0 | ✅ 同一手机号 60 秒内重复请求验证码返回"发送太频繁" |
+| P0 | ✅ `mvn compile` 通过，无 HttpSession 引用 |
+| P1 | ✅ 生产 Service 无测试代码，`TokenTestUtil` 可独立调用 |
+| P1 | ✅ 登录接口返回头携带 `authorization` + `Refresh-Token` |
+| P2 | ✅ `AuthService` 独立完成 Token 全生命周期管理 |
+| P2 | ✅ Lua 异常时返回错误消息，不静默吞掉 |
+| P2 | ✅ Caffeine 使用 `getIfPresent` 不阻塞 |
+| P3 | ✅ 非本人查询 `GET /user/{id}` 返回 403 |
+| P3 | ✅ 非本人查询 `GET /user/info/{id}` 返回 403 |
+| P4 | ✅ 拦截器代码量减少 50%+，`@RecordTime` 接管耗时日志 |
 
 ---
 
 ## 7. 与前端对接注意事项
 
-1. **Token 传递方式统一后**（Phase 4），前端登录代码需要调整：
-   ```js
-   // 当前（响应体取 Token）
-   const data = await response.json();
-   localStorage.setItem('token', data.data.token);
+### 7.1 Token 获取方式变更（Phase 1 起生效）
 
-   // 改为（响应头取 Token）
-   localStorage.setItem('token', response.headers.get('authorization'));
-   localStorage.setItem('refreshToken', response.headers.get('Refresh-Token'));
-   ```
+```js
+// 旧方式（v2 及之前）—— 从响应体取
+const data = await response.json();
+localStorage.setItem('token', data.data.token);
+localStorage.setItem('refreshToken', data.data.refreshToken);
 
-2. **logout 实现后**，前端应在用户退出时调用 `POST /user/logout`，并清除本地存储的 Token。
+// 新方式（Phase 1 后）—— 从响应头取
+localStorage.setItem('token', response.headers.get('authorization'));
+localStorage.setItem('refreshToken', response.headers.get('Refresh-Token'));
+```
 
-3. **CORS 配置已完成**（`CorsConfig`），前端无需额外代理即可跨域调用。
+### 7.2 logout 调用（Phase 0 起可用）
+
+```js
+// 用户退出时
+await fetch('/user/logout', {
+    method: 'POST',
+    headers: {
+        'authorization': localStorage.getItem('token'),
+        'Refresh-Token': localStorage.getItem('refreshToken')
+    }
+});
+localStorage.removeItem('token');
+localStorage.removeItem('refreshToken');
+window.location.href = '/login';
+```
+
+### 7.3 CORS
+
+项目已配置 `CorsConfig`，开发期允许所有来源跨域，无需前端代理。
+
+---
+
+## 8. 架构审查追踪
+
+| 审查问题 | 严重程度 | 在 v3 中如何解决 |
+|----------|---------|-----------------|
+| 验证码可重复使用 | 🔴 P0 | 0.2：新建 `ConsumeVerifyCode.lua` 原子 GET+DEL |
+| logout 未实现 | 🔴 P0 | 0.1：提到 Phase 0，10 分钟实现 |
+| GET /user/{id} 无权限 | 🔴 P0 | 3.1：仅本人可查 |
+| Caffeine get() 阻塞 | 🟠 P1 | 2.7：改为 `getIfPresent()` |
+| Token 传递不统一 | 🟠 P1 | 1.5-1.6：提前到 Phase 1 统一为响应头 |
+| Lua JSON 解析脆弱 | 🟡 P2 | 2.6：Lua 异常时返回错误消息 |
+| 方案二破坏无状态原则 | 🟠 P1 | v3 **已删除方案二**，仅保留响应头方案 |
+| info() 接口无权限 | 🟡 P2 | 3.2：补充权限校验 |
+| 验证码无限频 | 🟡 P2 | 0.3：60 秒频率限制 |
+| 拼写错误 | 🔵 P3 | 0.6：修复 |
+
+---
+
+## 9. 拆分执行建议
+
+建议按以下顺序执行，每完成一个 Phase 提交一次：
+
+```
+commit 1: "fix: implement logout, atomic verify code, and rate limit"           → Phase 0
+commit 2: "refactor: extract test utilities and unify token delivery"            → Phase 1
+commit 3: "feat: add AuthService for token lifecycle management"                  → Phase 2
+commit 4: "fix: add auth check and cache for user endpoints"                      → Phase 3
+commit 5: "refactor: slim down RefreshTokenInterceptor"                           → Phase 4
+```
