@@ -49,4 +49,9 @@ public class RedisLuaConfig {
         return createScript("RefreshExpiredToken.lua", Long.class);
     }
 
+    @Bean(name = "consumeVerifyCodeScript")
+    public DefaultRedisScript<String> consumeVerifyCodeScript() {
+        return createScript("ConsumeVerifyCode.lua", String.class);
+    }
+
 }

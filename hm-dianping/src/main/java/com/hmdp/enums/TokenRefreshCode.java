@@ -40,7 +40,7 @@ public enum TokenRefreshCode {
      * 44x
      * userInfo 相关错误
      */
-    USEINFO_NOT_FOUND (441L,"userInfo不存在"),
+    USEINFO_NOT_FOUND (441L,"用户信息不存在"),
     USERINFO_CACHE_EMPTY (442L,"用户信息缓存空值");
 
 

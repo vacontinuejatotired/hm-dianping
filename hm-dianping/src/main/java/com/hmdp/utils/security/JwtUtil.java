@@ -178,7 +178,7 @@ public class JwtUtil {
                 .compact();
     }
 
-    public Claims valiateAndGetClaimFromToken(String token) throws JwtException {
+    public Claims validateAndGetClaimFromToken(String token) throws JwtException {
 
 //        if (PUBLIC_KEY == null) {
 //            log.error("Public key is null - cannot verify JWT signature");

@@ -4,8 +4,8 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.ITestService;
-import com.hmdp.service.IUserService;
 import com.hmdp.service.IVoucherOrderService;
+import com.hmdp.utils.TokenTestUtil;
 import com.hmdp.utils.redis.RedisConstants;
 import com.hmdp.utils.redis.RedisIdWorker;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +27,7 @@ public class TestServiceImpl implements ITestService {
     private IVoucherOrderService voucherOrderService;
 
     @Resource
-    private IUserService userService;
+    private TokenTestUtil tokenTestUtil;
 
     @Resource
     private RedisIdWorker redisIdWorker;
@@ -68,7 +68,7 @@ public class TestServiceImpl implements ITestService {
     }
     @Override
     public Result generateTestToken(Long num,String fileName) {
-        userService.exportTokenAndRefreshTokenToCsv(Math.toIntExact(num),fileName);
+        tokenTestUtil.exportTokenAndRefreshTokenToCsv(Math.toIntExact(num),fileName);
         return Result.ok("success");
     }
 
