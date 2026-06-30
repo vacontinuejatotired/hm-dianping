@@ -13,7 +13,8 @@
 | [登录流程](login-process-flow.md) | 用户登录的完整时序图（验证码→双Token生成） | 前后端开发 |
 | [Token 刷新拦截器流程](refresh-token-interceptor-flow.md) | RefreshTokenInterceptor 校验与刷新的完整流程 | 后端 |
 | [过期 Token 刷新流程](refresh-expired-token-flow.md) | Access Token 过期后通过 Refresh Token 续期的处理链路 | 后端 |
-| [Login 模块重构方案](login重构方案.md) | v2 — 5个Phase，18个子任务，含文件变更清单和验收标准 | 后端 |
+| [Login 模块重构方案](login重构方案.md) | v3 — 6 个 Phase，21 个子任务，含架构审查追踪矩阵 | 后端 |
+| [项目优化方案](项目优化方案.md) | 秒杀/商铺/Upload/RabbitMQ 等非 Login 模块问题 | 后端 |
 
 ### 📡 前端对接
 
@@ -26,6 +27,12 @@
 | 文档 | 说明 | 适用对象 |
 |------|------|---------|
 | [下单优化压测报告](下单优化压测报告.md) | 秒杀场景下 Redis+MQ 异步落库的压测数据与对比 | 后端 |
+
+### 🛠️ 全项目优化
+
+| 文档 | 说明 | 适用对象 |
+|------|------|---------|
+| [项目优化方案](项目优化方案.md) | 秒杀/商铺/Upload/RabbitMQ 等非 Login 模块的问题与建议 | 后端 |
 
 ### 📐 开发规范
 
