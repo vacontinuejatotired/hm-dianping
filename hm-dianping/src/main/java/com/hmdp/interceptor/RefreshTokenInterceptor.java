@@ -104,8 +104,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                     .setIfAbsent(lockKey, "1", 3, TimeUnit.SECONDS));
             if (!locked) {
                 log.info("【Token拦截】刷新锁被占用，跳过刷新 userId={}", userId);
-                // 锁忙时仍写回原 token，前端依赖响应头更新本地存储，不能空手返回
-                response.setHeader("authorization", "Bearer " + token);
+                response.setHeader("X-Token-Refresh", "skipped");
+                // 不写回 authorization 头，避免旧值覆盖前端已更新的新 token
                 return true;
             }
             try {
@@ -114,11 +114,13 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
                 if (newPair == null) {
                     log.warn("【Token拦截】刷新失败 userId={}", userId);
+                    response.setHeader("X-Token-Refresh", "failed");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     return false;
                 }
 
                 // 刷新成功：写回响应头 + 设置 Refresh Token Cookie
+                response.setHeader("X-Token-Refresh", "ok");
                 response.setHeader("authorization", "Bearer " + newPair.getAccessToken());
                 if (newPair.getRefreshToken() != null) {
                     jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie("refresh_token", newPair.getRefreshToken());
