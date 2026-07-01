@@ -260,7 +260,9 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // ==================== 登出 ====================
-
+    //暴力删除是否可行？
+    //需列出边界情况
+    //告诉我这种情况下仍能登录成功的场景
     @Override
     public void revokeTokens(Long userId) {
         stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + userId);

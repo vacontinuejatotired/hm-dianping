@@ -23,6 +23,9 @@ public interface IUserService extends IService<User> {
     Result sendCode(String phone);
     TokenPair login(LoginFormDTO loginForm);
 
+    /** 登出：删除 Redis 中该用户的所有 Token/Version */
+    void logout(Long userId);
+
     TokenPair changePassword(PasswordChangeDTO dto);
 
     Result sign();

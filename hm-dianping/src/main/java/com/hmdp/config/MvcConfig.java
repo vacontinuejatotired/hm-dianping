@@ -26,6 +26,8 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/user/code",
                         "/shop-type/**",
                         "/test/restart/**").order(1);
-        registry.addInterceptor(refreshTokenInterceptor).addPathPatterns("/**").excludePathPatterns("/blog/hot","/user/login","/user/code","/shop-type/list","/test/restart/**").order(0);
+        registry.addInterceptor(refreshTokenInterceptor).addPathPatterns("/**").excludePathPatterns(
+                "/blog/hot","/user/login","/user/code","/shop-type/list","/test/restart/**",
+                "/shop/**","/voucher/**").order(0);
     }
 }

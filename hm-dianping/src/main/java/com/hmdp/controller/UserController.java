@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.concurrent.TimeUnit;
 
@@ -59,18 +60,23 @@ public class UserController {
     public Result login(@RequestBody LoginFormDTO loginForm, HttpServletResponse response){
         TokenPair tokenPair = userService.login(loginForm);
         response.setHeader("authorization", tokenPair.getAccessToken());
-        response.setHeader("Refresh-Token", tokenPair.getRefreshToken());
+        setRefreshTokenCookie(response, tokenPair.getRefreshToken());
         return Result.ok();
     }
 
     /**
-     * 登出功能
-     * @return 无
+     * 登出功能 — 删除 Redis 中该用户的所有 Token/Version 记录
      */
     @PostMapping("/logout")
     public Result logout(){
-        // TODO 实现登出功能
-        return Result.fail("功能未完成");
+        Long userId = UserHolder.getUserId();
+        if (userId == null) {
+            return Result.fail("未登录");
+        }
+        userService.logout(userId);
+        UserHolder.remove();
+        log.info("用户登出成功 userId={}", userId);
+        return Result.ok();
     }
 
     @GetMapping("/me")
@@ -133,8 +139,20 @@ public class UserController {
     public Result changePassword(@RequestBody PasswordChangeDTO dto, HttpServletResponse response){
         TokenPair tokenPair = userService.changePassword(dto);
         response.setHeader("authorization", tokenPair.getAccessToken());
-        response.setHeader("Refresh-Token", tokenPair.getRefreshToken());
+        setRefreshTokenCookie(response, tokenPair.getRefreshToken());
         log.info("密码修改成功 userId={}", UserHolder.getUserId());
         return Result.ok();
+    }
+
+    /**
+     * 设置 Refresh Token 到 httpOnly Cookie（JS 不可读，自动随请求发送）
+     */
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie("refresh_token", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(7 * 24 * 60 * 60); // 7 天
+        response.addCookie(cookie);
     }
 }

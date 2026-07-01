@@ -190,6 +190,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     @Override
+    public void logout(Long userId) {
+        authService.revokeTokens(userId);
+    }
+
+    @Override
     public Result sendCode(String phone) {
         if (RegexUtils.isPhoneInvalid(phone)) {
             throw new IllegalArgumentException("手机号不规范");
