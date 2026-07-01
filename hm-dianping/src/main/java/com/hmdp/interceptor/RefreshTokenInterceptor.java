@@ -103,7 +103,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             }
 
             // 刷新成功：写回响应头 + 设置 Refresh Token Cookie
-            response.setHeader("Authorization", "Bearer " + newPair.getAccessToken());
+            response.setHeader("authorization", "Bearer " + newPair.getAccessToken());
             if (newPair.getRefreshToken() != null) {
                 jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie("refresh_token", newPair.getRefreshToken());
                 refreshCookie.setHttpOnly(true);
