@@ -46,6 +46,18 @@ public class UploadController {
         if (file.isDirectory()) {
             return Result.fail("错误的文件名称");
         }
+        // 路径穿越防护：规范化路径，确认在允许目录内
+        try {
+            String canonicalPath = file.getCanonicalPath();
+            String uploadDir = new File(SystemConstants.IMAGE_UPLOAD_DIR).getCanonicalPath();
+            if (!canonicalPath.startsWith(uploadDir)) {
+                log.warn("路径穿越拦截: {} -> {}", filename, canonicalPath);
+                return Result.fail("非法的文件名称");
+            }
+        } catch (IOException e) {
+            log.error("路径解析失败: {}", filename, e);
+            return Result.fail("非法的文件名称");
+        }
         FileUtil.del(file);
         return Result.ok();
     }
