@@ -2,6 +2,7 @@ package com.hmdp.controller;
 
 
 import cn.hutool.core.bean.BeanUtil;
+import com.hmdp.config.CookieConfig;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.PasswordChangeDTO;
 import com.hmdp.dto.Result;
@@ -42,6 +43,8 @@ public class UserController {
     private IUserInfoService userInfoService;
     @Resource
     private CacheClient cacheClient;
+    @Resource
+    private CookieConfig cookieConfig;
 
     /**
      * 发送手机验证码
@@ -146,16 +149,21 @@ public class UserController {
 
     /**
      * 设置 Refresh Token 到 httpOnly Cookie（JS 不可读，自动随请求发送）
-     * SameSite 属性由 application.yml 控制（dev=Lax, prod=None）
+     * SameSite/Secure 从 application-{profile}.yaml 读取
      */
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         Cookie cookie = new Cookie("refresh_token", refreshToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(true);  // 生产 HTTPS 必需；开发环境需改为 false
+        cookie.setSecure(cookieConfig.isSecure());
         cookie.setPath("/");
         cookie.setMaxAge(7 * 24 * 60 * 60);
-        // 注意：SameSite 属性无法通过 Cookie API 设置，需要时在 application.yml 中通过
-        // server.servlet.session.cookie.same-site 或 response.addHeader("Set-Cookie", ...) 覆盖
-        response.addCookie(cookie);
+        // SameSite 属性无法通过标准 Cookie API 设置，需手动追加
+        response.addHeader("Set-Cookie", String.format(
+                "%s=%s; HttpOnly; %sSameSite=%s; Path=/; MaxAge=%d",
+                "refresh_token", refreshToken,
+                cookieConfig.isSecure() ? "Secure; " : "",
+                cookieConfig.getSameSite(),
+                7 * 24 * 60 * 60
+        ));
     }
 }
