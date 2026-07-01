@@ -104,7 +104,9 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                     .setIfAbsent(lockKey, "1", 3, TimeUnit.SECONDS));
             if (!locked) {
                 log.info("【Token拦截】刷新锁被占用，跳过刷新 userId={}", userId);
-                return true; // 不阻塞，跳过刷新，access_token 仍有效几分钟
+                // 锁忙时仍写回原 token，前端依赖响应头更新本地存储，不能空手返回
+                response.setHeader("authorization", "Bearer " + token);
+                return true;
             }
             try {
                 TokenPair newPair = authService.refreshTokenPair(
