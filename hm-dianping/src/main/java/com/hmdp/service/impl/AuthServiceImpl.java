@@ -171,50 +171,22 @@ public class AuthServiceImpl implements AuthService {
     /**
      * 临期刷新 — token 未过期但剩余时间 < 5-10 分钟
      * 保持 version 不变，只换 access token
+     * 分布式锁由拦截器保证，此处只做刷新
      */
     private TokenPair doDeadlineRefresh(String accessToken, String refreshToken, Long userId, Long oldVersion) {
+        // 锁内生成 JWT + 直接写入 Redis（不调 Lua，避免重复校验）
         String newToken = jwtUtil.generateToken(userId,
                 RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES, oldVersion);
+        String newRefreshToken = cn.hutool.core.lang.UUID.randomUUID().toString().replace("-", "");
 
-        String userInfoKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
-        UserinfoCache cache = userinfoCaffeine.getIfPresent(userInfoKey);
-        String userinfoMapJson = cache == null ? "" : JSONUtil.toJsonStr(cache);
+        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + userId,
+                newToken, 30, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_REFRESH_USER_KEY + userId,
+                newRefreshToken, 7, TimeUnit.DAYS);
 
-        List<String> args = new ArrayList<>();
-        args.add(accessToken);
-        args.add(newToken);
-        args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(RedisConstants.LOGIN_JWT_TTL_MINUTES)));
-        args.add(oldVersion.toString());
-        args.add(refreshToken);
-        args.add(RedisConstants.NEW_VERSION_TTL_SECONDS.toString());
-        args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
-        args.add(userinfoMapJson);
-        args.add(CaffeineConstants.USERINFO_CACHE_TTL_SECONDS.toString());
-
-        List<String> keys = Arrays.asList(
-                RedisConstants.LOGIN_USER_KEY + userId,
-                RedisConstants.LOGIN_VALID_VERSION_KEY + userId,
-                RedisConstants.LOGIN_REFRESH_USER_KEY + userId,
-                RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId,
-                userInfoKey
-        );
-
-        Long luaResult = stringRedisTemplate.execute(refreshDeadlineTokenScript, keys, args.toArray());
-
-        if (TokenRefreshCode.SUCCESS.getCode().equals(luaResult)) {
-            log.info("临期刷新成功 userId={}", userId);
-            updateLocalVersionCache(userId, oldVersion);
-            if (TokenRefreshCode.USEINFO_NOT_FOUND.getCode().equals(luaResult)
-                    || TokenRefreshCode.USERINFO_CACHE_EMPTY.getCode().equals(luaResult)) {
-                if (cache != null) {
-                    batchLoadCache.saveFuture(cache.getId());
-                }
-            }
-            return new TokenPair(newToken, refreshToken, oldVersion);
-        }
-
-        log.warn("临期刷新失败, userId={}, code={}", userId, TokenRefreshCode.getDefaultMessage(luaResult));
-        return null;
+        updateLocalVersionCache(userId, oldVersion);
+        log.info("临期刷新成功 userId={}", userId);
+        return new TokenPair(newToken, newRefreshToken, oldVersion);
     }
 
     /**

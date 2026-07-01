@@ -10,7 +10,9 @@ import com.hmdp.utils.cache.CaffeineConstants;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -24,6 +26,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     @Resource
     private AuthService authService;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
     @Resource(name = "userinfoCache")
     private LoadingCache<String, UserinfoCache> userinfoCaffeine;
 
@@ -90,30 +94,43 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 return true;
             }
 
-            // ④ 需要刷新 — 委托 AuthService
+            // ④ 需要刷新 — 分布式锁 + 委托 AuthService
             log.info("【Token拦截】Token 需要刷新 userId={}", userId);
-            boolean isExpired = !result.isValid(); // valid=false 且 needsRefresh=true → 已过期
-            TokenPair newPair = authService.refreshTokenPair(
-                    token, refreshToken, userId, result.getVersion(), isExpired);
+            boolean isExpired = !result.isValid();
 
-            if (newPair == null) {
-                log.warn("【Token拦截】刷新失败 userId={}", userId);
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return false;
+            // 分布式锁保护：同一用户同时只有一个刷新请求执行
+            String lockKey = "lock:refresh:" + userId;
+            boolean locked = Boolean.TRUE.equals(stringRedisTemplate.opsForValue()
+                    .setIfAbsent(lockKey, "1", 3, TimeUnit.SECONDS));
+            if (!locked) {
+                log.info("【Token拦截】刷新锁被占用，跳过刷新 userId={}", userId);
+                return true; // 不阻塞，跳过刷新，access_token 仍有效几分钟
             }
+            try {
+                TokenPair newPair = authService.refreshTokenPair(
+                        token, refreshToken, userId, result.getVersion(), isExpired);
 
-            // 刷新成功：写回响应头 + 设置 Refresh Token Cookie
-            response.setHeader("authorization", "Bearer " + newPair.getAccessToken());
-            if (newPair.getRefreshToken() != null) {
-                jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie("refresh_token", newPair.getRefreshToken());
-                refreshCookie.setHttpOnly(true);
-                refreshCookie.setSecure(true);
-                refreshCookie.setPath("/");
-                refreshCookie.setMaxAge(7 * 24 * 60 * 60); // 7 天
-                response.addCookie(refreshCookie);
+                if (newPair == null) {
+                    log.warn("【Token拦截】刷新失败 userId={}", userId);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return false;
+                }
+
+                // 刷新成功：写回响应头 + 设置 Refresh Token Cookie
+                response.setHeader("authorization", "Bearer " + newPair.getAccessToken());
+                if (newPair.getRefreshToken() != null) {
+                    jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie("refresh_token", newPair.getRefreshToken());
+                    refreshCookie.setHttpOnly(true);
+                    refreshCookie.setSecure(true);
+                    refreshCookie.setPath("/");
+                    refreshCookie.setMaxAge(7 * 24 * 60 * 60); // 7 天
+                    response.addCookie(refreshCookie);
+                }
+                log.info("【Token拦截】刷新成功 userId={}", userId);
+                return true;
+            } finally {
+                stringRedisTemplate.delete(lockKey);
             }
-            log.info("【Token拦截】刷新成功 userId={}", userId);
-            return true;
 
         } finally {
             long totalTime = System.currentTimeMillis() - methodStartTime;
