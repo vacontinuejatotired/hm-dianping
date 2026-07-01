@@ -62,7 +62,7 @@ public class UserController {
     @PostMapping("/login")
     public Result login(@RequestBody LoginFormDTO loginForm, HttpServletResponse response){
         TokenPair tokenPair = userService.login(loginForm);
-        response.setHeader("authorization", tokenPair.getAccessToken());
+        response.setHeader("authorization", "Bearer " + tokenPair.getAccessToken());
         setRefreshTokenCookie(response, tokenPair.getRefreshToken());
         return Result.ok();
     }
@@ -141,7 +141,7 @@ public class UserController {
     @PutMapping("/password")
     public Result changePassword(@RequestBody PasswordChangeDTO dto, HttpServletResponse response){
         TokenPair tokenPair = userService.changePassword(dto);
-        response.setHeader("authorization", tokenPair.getAccessToken());
+        response.setHeader("authorization", "Bearer " + tokenPair.getAccessToken());
         setRefreshTokenCookie(response, tokenPair.getRefreshToken());
         log.info("密码修改成功 userId={}", UserHolder.getUserId());
         return Result.ok();
