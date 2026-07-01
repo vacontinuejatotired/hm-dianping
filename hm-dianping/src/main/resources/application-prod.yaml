@@ -1,0 +1,32 @@
+server:
+  port: 8082
+  tomcat:
+    max-connections: 1000
+    accept-count: 1000
+    threads:
+      max: 500
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://prod-host:3306/heima?useSSL=true&serverTimezone=UTC
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: 6379
+      password: ${REDIS_PASSWORD}
+  rabbitmq:
+    host: ${MQ_HOST}
+    password: ${MQ_PASSWORD}
+    username: ${MQ_USERNAME}
+    virtual-host: /
+
+app:
+  cookie:
+    same-site: None
+    secure: true
