@@ -32,4 +32,14 @@ public class RedisConstants {
     public static final String SHOP_GEO_KEY = "shop:geo:";
     public static final String USER_SIGN_KEY = "sign:";
     public static final String CACHE_SHOPTYPE_KEY = "cache:shopType";
+
+    // 密码登录限频
+    public static final String LOGIN_FAIL_IP_KEY = "login:fail:ip:";
+    public static final Long LOGIN_FAIL_IP_TTL = 60L;        // 60 秒
+    public static final int LOGIN_FAIL_IP_MAX = 5;           // 每分钟最多 5 次
+    public static final String LOGIN_FAIL_COUNT_KEY = "login:fail:count:";
+    public static final Long LOGIN_FAIL_COUNT_TTL = 86400L;  // 24 小时
+    public static final int LOGIN_FAIL_COUNT_LOCK = 10;      // 连续 10 次锁定
+    public static final String LOGIN_LOCK_KEY = "login:lock:";
+    public static final Long LOGIN_LOCK_TTL = 1800L;         // 30 分钟
 }

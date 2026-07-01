@@ -33,6 +33,12 @@ public class RegexUtils {
         return mismatch(code, RegexPatterns.VERIFY_CODE_REGEX);
     }
 
+    public static boolean isPasswordInvalid(String password) {
+        if (password == null || password.length() < 8) return true;
+        // 至少包含一个大写字母、一个小写字母、一个数字
+        return !password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$");
+    }
+
     // 校验是否不符合正则格式
     private static boolean mismatch(String str, String regex){
         if (StrUtil.isBlank(str)) {

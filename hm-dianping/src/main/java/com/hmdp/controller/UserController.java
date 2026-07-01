@@ -3,6 +3,7 @@ package com.hmdp.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.hmdp.dto.LoginFormDTO;
+import com.hmdp.dto.PasswordChangeDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.TokenPair;
 import com.hmdp.dto.UserDTO;
@@ -121,5 +122,19 @@ public class UserController {
     @GetMapping("/sign/count")
     public Result signCount(){
         return userService.getSignCount();
+    }
+
+    /**
+     * 修改密码
+     * @param dto 旧密码 + 新密码
+     * @return 新 TokenPair（旧 Token 自动失效）
+     */
+    @PutMapping("/password")
+    public Result changePassword(@RequestBody PasswordChangeDTO dto, HttpServletResponse response){
+        TokenPair tokenPair = userService.changePassword(dto);
+        response.setHeader("authorization", tokenPair.getAccessToken());
+        response.setHeader("Refresh-Token", tokenPair.getRefreshToken());
+        log.info("密码修改成功 userId={}", UserHolder.getUserId());
+        return Result.ok();
     }
 }
