@@ -1,37 +1,43 @@
 package com.hmdp.utils.security;
 
-
-import cn.hutool.core.util.RandomUtil;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
 
 /**
- * 密码编码器 — MD5 加盐加密与校验
+ * 密码编码器 — BCrypt 加密与校验（兼容旧 MD5+盐格式）
  */
 public class PasswordEncoder {
 
-    public static String encode(String password) {
-        // 生成盐
-        String salt = RandomUtil.randomString(20);
-        // 加密
-        return encode(password,salt);
+    private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder();
+
+    public static String encode(String rawPassword) {
+        return ENCODER.encode(rawPassword);
     }
-    private static String encode(String password, String salt) {
-        // 加密
-        return salt + "@" + DigestUtils.md5DigestAsHex((password + salt).getBytes(StandardCharsets.UTF_8));
-    }
-    public static Boolean matches(String encodedPassword, String rawPassword) {
+
+    public static boolean matches(String rawPassword, String encodedPassword) {
         if (encodedPassword == null || rawPassword == null) {
             return false;
         }
-        if(!encodedPassword.contains("@")){
-            throw new RuntimeException("密码格式不正确！");
+        // 先 bcrypt 匹配
+        if (ENCODER.matches(rawPassword, encodedPassword)) {
+            return true;
         }
+        // 降级 MD5 校验（旧格式）
+        return matchesMd5(rawPassword, encodedPassword);
+    }
+
+    /**
+     * 降级 MD5 校验（旧格式兼容）
+     */
+    private static boolean matchesMd5(String rawPassword, String encodedPassword) {
+        if (encodedPassword == null || rawPassword == null) return false;
+        if (!encodedPassword.contains("@")) return false;
         String[] arr = encodedPassword.split("@");
-        // 获取盐
         String salt = arr[0];
-        // 比较
-        return encodedPassword.equals(encode(rawPassword, salt));
+        String expectedHash = DigestUtils.md5DigestAsHex(
+                (rawPassword + salt).getBytes(StandardCharsets.UTF_8));
+        return encodedPassword.equals(salt + "@" + expectedHash);
     }
 }
