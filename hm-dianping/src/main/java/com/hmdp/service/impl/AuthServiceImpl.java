@@ -1,12 +1,9 @@
 package com.hmdp.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.json.JSONUtil;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.hmdp.dto.LuaResult;
 import com.hmdp.dto.TokenPair;
-import com.hmdp.dto.UserDTO;
 import com.hmdp.dto.ValidationResult;
 import com.hmdp.entity.TokenVersionCache;
 import com.hmdp.entity.UserinfoCache;
@@ -269,7 +266,12 @@ public class AuthServiceImpl implements AuthService {
         stringRedisTemplate.delete(RedisConstants.LOGIN_REFRESH_USER_KEY + userId);
         stringRedisTemplate.delete(RedisConstants.LOGIN_VALID_VERSION_KEY + userId);
         stringRedisTemplate.delete(RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId);
-        log.info("【登出】已清除 userId={} 的所有 Token 和 Version", userId);
+        // 清除本地 Caffeine 缓存
+        String userInfoKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
+        userinfoCaffeine.invalidate(userInfoKey);
+        String versionKey = CaffeineConstants.TOKEN_VALID_VERSION_CACHE_KEY + userId;
+        tokenValidVersionCache.invalidate(versionKey);
+        log.info("【登出】已清除 userId={} 的所有 Token、Version 和本地缓存", userId);
     }
 
     // ==================== 验证码 ====================
@@ -286,16 +288,8 @@ public class AuthServiceImpl implements AuthService {
 
     // ==================== 用户缓存 ====================
 
-    @Override
-    public void cacheUserInfo(UserDTO userDTO) {
-        Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
-                CopyOptions.create().setIgnoreNullValue(true)
-                        .setFieldValueEditor((filedName, filedValue) -> filedValue.toString()));
-        stringRedisTemplate.opsForHash().putAll(
-                RedisConstants.LOGIN_USERINFO_MAP + userDTO.getId(), userMap);
-        stringRedisTemplate.expire(
-                RedisConstants.LOGIN_USERINFO_MAP + userDTO.getId(), 30, TimeUnit.MINUTES);
-    }
+    // cacheUserInfo 已废弃：写入 login:userinfo:{id} 但从未被读取。
+    // 用户信息缓存统一由 BatchLoadCache 管理（cache:userinfo:{id}）。
 
     // ==================== 本地缓存更新 ====================
 

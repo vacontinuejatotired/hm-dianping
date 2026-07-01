@@ -108,7 +108,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         TokenPair tokenPair = authService.generateTokenPair(user.getId());
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
-        authService.cacheUserInfo(userDTO);
 
         log.info("【密码登录成功】userId={}", user.getId());
         return tokenPair;
@@ -139,7 +138,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         TokenPair tokenPair = authService.generateTokenPair(user.getId());
         UserDTO userDTO = new UserDTO();
         BeanUtil.copyProperties(user, userDTO);
-        authService.cacheUserInfo(userDTO);
 
         log.info("【验证码登录成功】userId={}", user.getId());
         return tokenPair;

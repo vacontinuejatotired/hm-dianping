@@ -42,7 +42,4 @@ public interface AuthService {
 
     /** 原子消费验证码：GET + DEL，防止重放 */
     boolean consumeVerifyCode(String phone, String code);
-
-    /** 缓存用户信息到 Redis Hash */
-    void cacheUserInfo(UserDTO userDTO);
 }
