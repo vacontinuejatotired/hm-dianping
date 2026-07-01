@@ -41,8 +41,26 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 return false;
             }
 
-            String token = request.getHeader("authorization");
-            String refreshToken = request.getHeader("Refresh-Token");
+            String token = request.getHeader("Authorization");
+            if (token != null && token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            // 兼容旧的 authorization 头（全小写 + 无 Bearer 前缀）
+            if (token == null) {
+                token = request.getHeader("authorization");
+            }
+
+            // Refresh Token 从 httpOnly Cookie 读取，JS 不可访问
+            String refreshToken = null;
+            jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (jakarta.servlet.http.Cookie cookie : cookies) {
+                    if ("refresh_token".equals(cookie.getName())) {
+                        refreshToken = cookie.getValue();
+                        break;
+                    }
+                }
+            }
 
             // ① AuthService 做完整校验：JWT 解析 + Caffeine + Redis 版本
             ValidationResult result = authService.validateAccessToken(token);
@@ -84,10 +102,15 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 return false;
             }
 
-            // 刷新成功：写回响应头
-            response.setHeader("authorization", newPair.getAccessToken());
+            // 刷新成功：写回响应头 + 设置 Refresh Token Cookie
+            response.setHeader("Authorization", "Bearer " + newPair.getAccessToken());
             if (newPair.getRefreshToken() != null) {
-                response.setHeader("Refresh-Token", newPair.getRefreshToken());
+                jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie("refresh_token", newPair.getRefreshToken());
+                refreshCookie.setHttpOnly(true);
+                refreshCookie.setSecure(true);
+                refreshCookie.setPath("/");
+                refreshCookie.setMaxAge(7 * 24 * 60 * 60); // 7 天
+                response.addCookie(refreshCookie);
             }
             log.info("【Token拦截】刷新成功 userId={}", userId);
             return true;
