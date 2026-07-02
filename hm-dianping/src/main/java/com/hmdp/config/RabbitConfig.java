@@ -78,7 +78,7 @@
      // 如果使用 RabbitTemplate，也可自定义
 //     @Bean("myRabbitTemplate")
      @Bean
-     public RabbitTemplate rabbitTemplate(CachingConnectionFactory cf) {
+     public RabbitTemplate rabbitTemplate(ConnectionFactory cf) {
          RabbitTemplate template = new RabbitTemplate(cf);
          template.setMessageConverter(messageConverter());
          template.setMandatory(true);  // 如有返回，可观察

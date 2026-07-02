@@ -54,4 +54,9 @@ public class RedisLuaConfig {
         return createScript("ConsumeVerifyCode.lua", String.class);
     }
 
+    @Bean(name = "REDIS_LOGIN_SET_TOKEN")
+    public DefaultRedisScript<String> loginSetTokenScript() {
+        return createScript("LoginSetToken.lua", String.class);
+    }
+
 }
