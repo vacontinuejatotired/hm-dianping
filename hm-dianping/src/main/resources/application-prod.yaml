@@ -6,27 +6,63 @@ server:
     threads:
       max: 500
 
+management:
+  health:
+    rabbit:
+      enabled: false
+
 spring:
   config:
     activate:
       on-profile: prod
+  application:
+    name: hmdp
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://prod-host:3306/heima?useSSL=true&serverTimezone=UTC
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: jdbc:mysql://prod-host:3307/heima?useSSL=true&serverTimezone=UTC
+    username: root
+    password: 123456
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+  jackson:
+    default-property-inclusion: non_null
   data:
     redis:
-      host: ${REDIS_HOST}
+      host: 192.168.49.130
       port: 6379
-      password: ${REDIS_PASSWORD}
+      password: 281458
+      lettuce:
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 5
+          time-between-eviction-runs: 10s
   rabbitmq:
-    host: ${MQ_HOST}
-    password: ${MQ_PASSWORD}
-    username: ${MQ_USERNAME}
+    host: 192.168.49.130
+    password: 123321
+    username: qyh
     virtual-host: /
+  sql:
+    init:
+      mode: never
+
+mybatis-plus:
+  type-aliases-package: com.hmdp.entity
+
+logging:
+  level:
+    com.hmdp: debug
+    org.springframework.data.redis: WARN
+
+debug: false
 
 app:
   cookie:
     same-site: None
     secure: true
+  oss:
+    endpoint: oss-cn-beijing.aliyuncs.com
+    bucket: ntwitm1
+    access-key-id: ${OSS_ACCESS_KEY_ID}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET}
