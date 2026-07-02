@@ -1,9 +1,10 @@
 package com.hmdp.utils;
 
 import cn.hutool.core.util.StrUtil;
+import com.hmdp.utils.constants.RegexPatterns;
 
 /**
- * @author 虎哥
+ * 正则校验工具 — 手机号、邮箱格式校验
  */
 public class RegexUtils {
     /**
@@ -30,6 +31,12 @@ public class RegexUtils {
      */
     public static boolean isCodeInvalid(String code){
         return mismatch(code, RegexPatterns.VERIFY_CODE_REGEX);
+    }
+
+    public static boolean isPasswordInvalid(String password) {
+        if (password == null || password.length() < 8) return true;
+        // 至少包含一个大写字母、一个小写字母、一个数字
+        return !password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$");
     }
 
     // 校验是否不符合正则格式

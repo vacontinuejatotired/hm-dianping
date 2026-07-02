@@ -17,6 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @NoArgsConstructor
 @AllArgsConstructor
+/**
+ * 分布式雪花ID预生成队列 — 提前生成一批ID放入本地队列，避免高并发下实时生成延迟
+ */
 @Data
 public class SnowflakeIdQueue {
     /**

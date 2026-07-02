@@ -9,11 +9,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * <p>
- *  前端控制器
+ * 秒杀订单控制器 — 秒杀下单（Redis+Lua+Mq异步落库）
  * </p>
  *
  * @author 虎哥

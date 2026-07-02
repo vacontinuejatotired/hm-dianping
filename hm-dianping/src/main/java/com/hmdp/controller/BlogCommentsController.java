@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>
- *  前端控制器
+ * 博客评论控制器 — 预留，接口尚未实现（数据库表已存在 tb_blog_comments）
  * </p>
  *
  * @author 虎哥

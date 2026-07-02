@@ -12,12 +12,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 商铺实体 — 包含名称、位置（经纬度）、评分、营业时间等
+ * distance 为非数据库字段，仅在按距离排序时填充
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

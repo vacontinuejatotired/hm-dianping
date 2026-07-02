@@ -1,0 +1,6 @@
+.idea/ApifoxUploaderProjectSetting.xml
+*.xml
+.idea/misc.xml
+.idea/jarRepositories.xml
+.idea/dataSources.xml
+.reasonix/

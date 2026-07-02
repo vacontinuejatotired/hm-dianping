@@ -12,6 +12,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @author 虎哥
  * @since 2021-12-22
  */
+/**
+ * 关注服务接口 — 关注/取关、共同关注查询
+ */
 public interface IFollowService extends IService<Follow> {
 
     Result queryNotFollow(Long id);

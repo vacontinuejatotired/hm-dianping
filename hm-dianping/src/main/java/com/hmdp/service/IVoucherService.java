@@ -12,6 +12,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @author 虎哥
  * @since 2021-12-22
  */
+/**
+ * 优惠券服务接口 — 普通券/秒杀券CRUD，按商铺查询优惠券
+ */
 public interface IVoucherService extends IService<Voucher> {
 
     Result queryVoucherOfShop(Long shopId);

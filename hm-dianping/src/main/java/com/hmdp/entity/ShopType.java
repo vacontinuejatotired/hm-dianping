@@ -12,12 +12,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 商铺类型实体 — 用于首页顶部Tab分类展示（按sort排序）
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

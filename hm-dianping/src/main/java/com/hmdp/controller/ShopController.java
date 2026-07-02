@@ -6,14 +6,14 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.service.IShopService;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.constants.SystemConstants;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * <p>
- * 前端控制器
+ * 商铺控制器 — 商铺CRUD、按类型/名称/距离查询
  * </p>
  *
  * @author 虎哥

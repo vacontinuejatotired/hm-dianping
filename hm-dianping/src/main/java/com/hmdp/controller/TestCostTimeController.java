@@ -4,8 +4,11 @@ import com.hmdp.dto.Result;
 import com.hmdp.service.ITestService;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
+/**
+ * 测试/工具控制器 — 压测接口（空接口耗时、Token生成、秒杀重置、MQ批量下单等）
+ */
 @RestController
 @RequestMapping("/test")
 public class TestCostTimeController {

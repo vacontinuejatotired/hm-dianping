@@ -5,11 +5,11 @@ import com.hmdp.dto.Result;
 import com.hmdp.service.IFollowService;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * <p>
- * 前端控制器
+ * 关注控制器 — 关注/取关、是否已关注、共同关注查询
  * </p>
  *
  * @author 虎哥

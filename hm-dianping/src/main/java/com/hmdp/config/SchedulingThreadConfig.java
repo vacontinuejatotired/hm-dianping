@@ -6,6 +6,9 @@ import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
+/**
+ * 定时任务线程池配置 — 异步批量更新用户缓存、定时任务执行器
+ */
 @Configuration
 @EnableScheduling
 public class SchedulingThreadConfig implements SchedulingConfigurer {

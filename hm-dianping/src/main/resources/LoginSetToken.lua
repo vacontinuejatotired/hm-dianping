@@ -3,7 +3,7 @@
 --- Created by Ntwitm.
 --- DateTime: 2026/2/14 21:36
 ---
---强制清除相关token
+-- 原子覆盖 Token/Version（不先 DEL，避免主从切换时丢失 key）
 local tokenKey = KEYS[1]
 local refreshKey = KEYS[2]
 local versionKey = KEYS[3]
@@ -15,12 +15,7 @@ local tokenExpireSeconds = tonumber(ARGV[4])
 local refreshExpireSeconds = tonumber(ARGV[5])
 local versionExpireSeconds = tonumber(ARGV[6])
 local newVersionExpireSeconds = tonumber(ARGV[7])
--- 直接删除旧的（单设备登录，直接踢下线）
-redis.call('DEL', tokenKey)
-redis.call('DEL', refreshKey)
-redis.call('DEL', versionKey)
-
--- 设置新的
+-- 直接 SET 覆盖旧值（不先 DEL，避免主从切换时 DEL 已同步但 SET 未落盘导致 key 丢失）
 redis.call('SET', tokenKey, newToken, 'EX', tokenExpireSeconds)
 redis.call('SET', refreshKey, refreshToken, 'EX', refreshExpireSeconds)
 redis.call('SET', versionKey, version, 'EX', versionExpireSeconds)

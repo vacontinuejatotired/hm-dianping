@@ -6,16 +6,16 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Blog;
 import com.hmdp.service.IBlogService;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.constants.SystemConstants;
 import com.hmdp.utils.UserHolder;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.List;
 
 /**
  * <p>
- * 前端控制器
+ * 探店笔记控制器 — 笔记CRUD、点赞、点赞列表、关注者Feed流
  * </p>
  *
  * @author 虎哥

@@ -6,6 +6,9 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+/**
+ * 用户信息缓存实体 — Caffeine本地缓存中存储的用户信息快照
+ */
 @EqualsAndHashCode(callSuper = true)
 @Data
 @AllArgsConstructor

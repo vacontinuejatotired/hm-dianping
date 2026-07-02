@@ -11,12 +11,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 关注关系实体 — 记录 userId 关注了 followUserId
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

@@ -12,6 +12,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @author 虎哥
  * @since 2021-12-22
  */
+/**
+ * 商铺服务接口 — 商铺CRUD、按类型/距离/名称查询、多级缓存管理
+ */
 public interface IShopService extends IService<Shop> {
 
     Result queryById(Long id);

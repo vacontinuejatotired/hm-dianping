@@ -12,12 +12,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 探店笔记实体 — 用户发布的探店图文内容，含作者信息、点赞数、评论数
+ * icon/name/isLike 为查询时动态填充的非数据库字段
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

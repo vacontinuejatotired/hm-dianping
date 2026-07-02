@@ -4,27 +4,30 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.ITestService;
-import com.hmdp.service.IUserService;
 import com.hmdp.service.IVoucherOrderService;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.TokenTestUtil;
+import com.hmdp.utils.redis.RedisConstants;
+import com.hmdp.utils.redis.RedisIdWorker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
+/**
+ * 测试工具服务实现 — 秒杀库存重置、批量生成Token、雪花ID校验
+ */
 @Service
 @Slf4j
-public class TestServiceimpl implements ITestService {
+public class TestServiceImpl implements ITestService {
     @Resource
     private IVoucherOrderService voucherOrderService;
 
     @Resource
-    private IUserService userService;
+    private TokenTestUtil tokenTestUtil;
 
     @Resource
     private RedisIdWorker redisIdWorker;
@@ -65,7 +68,7 @@ public class TestServiceimpl implements ITestService {
     }
     @Override
     public Result generateTestToken(Long num,String fileName) {
-        userService.exportTokenAndRefreshTokenToCsv(Math.toIntExact(num),fileName);
+        tokenTestUtil.exportTokenAndRefreshTokenToCsv(Math.toIntExact(num),fileName);
         return Result.ok("success");
     }
 

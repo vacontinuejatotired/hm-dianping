@@ -12,12 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-24
+ * 用户详细信息实体 — 城市、介绍、粉丝数、关注数、性别、生日、积分、会员等级
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

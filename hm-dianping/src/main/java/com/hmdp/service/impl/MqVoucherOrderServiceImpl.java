@@ -3,14 +3,14 @@ package com.hmdp.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.injector.methods.DeleteById;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.Enum.SeckillOrderCode;
+import com.hmdp.enums.SeckillOrderCode;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
-import com.hmdp.utils.RabbitMqConstants;
-import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.constants.RabbitMqConstants;
+import com.hmdp.utils.redis.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
@@ -31,12 +31,16 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
 
+/**
+ * 秒杀订单服务实现（MQ异步版）— Redis+Lua原子校验库存/重复 → RabbitMQ异步落库
+ * 使用 @Primary 覆盖旧版同步实现
+ */
 @Service
 @Slf4j
 @Primary
@@ -192,7 +196,7 @@ public class MqVoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, V
     @Override
     public void createVoucherOrder(VoucherOrder voucherOrder) {
         Long userId = voucherOrder.getUserId();
-        int count = query().eq("user_id", voucherOrder.getUserId()).eq("voucher_id", voucherOrder.getVoucherId()).count();
+        int count = Math.toIntExact(query().eq("user_id", voucherOrder.getUserId()).eq("voucher_id", voucherOrder.getVoucherId()).count());
         if (count > 0) {
             log.error("该用户已经购买过");
             return;

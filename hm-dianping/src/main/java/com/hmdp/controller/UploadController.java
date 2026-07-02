@@ -1,64 +1,56 @@
 package com.hmdp.controller;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import com.hmdp.dto.Result;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.service.FileService;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.UUID;
+import java.util.Set;
 
+/**
+ * 文件上传控制器 — 博客图片上传/删除，委托 FileService 处理
+ * dev → LocalFileServiceImpl, prod → OssFileServiceImpl
+ */
 @Slf4j
 @RestController
 @RequestMapping("upload")
 public class UploadController {
 
+    @Resource
+    private FileService fileService;
+
+    private static final Set<String> ALLOWED_TYPES = Set.of("jpg", "jpeg", "png", "gif", "webp");
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024L;
+
     @PostMapping("blog")
     public Result uploadImage(@RequestParam("file") MultipartFile image) {
         try {
-            // 获取原始文件名称
             String originalFilename = image.getOriginalFilename();
-            // 生成新文件名
-            String fileName = createNewFileName(originalFilename);
-            // 保存文件
-            //TODO 这里保存到前端服务器，其实应该保存到文件服务器的
-            image.transferTo(new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName));
-            // 返回结果
-            log.debug("文件上传成功，{}", fileName);
-            return Result.ok(fileName);
+            // 文件类型校验
+            String ext = StrUtil.subAfter(originalFilename, ".", true).toLowerCase();
+            if (!ALLOWED_TYPES.contains(ext)) {
+                return Result.fail("不支持的文件类型，仅允许: " + ALLOWED_TYPES);
+            }
+            // 文件大小校验
+            if (image.getSize() > MAX_FILE_SIZE) {
+                return Result.fail("文件过大，最大允许 5MB");
+            }
+            // 委托 FileService 上传，返回完整 URL
+            String url = fileService.upload(image.getInputStream(), originalFilename, "blogs");
+            log.debug("文件上传成功，{}", url);
+            return Result.ok(url);
         } catch (IOException e) {
             throw new RuntimeException("文件上传失败", e);
         }
     }
 
-    @GetMapping("/blog/delete")
-    public Result deleteBlogImg(@RequestParam("name") String filename) {
-        File file = new File(SystemConstants.IMAGE_UPLOAD_DIR, filename);
-        if (file.isDirectory()) {
-            return Result.fail("错误的文件名称");
-        }
-        FileUtil.del(file);
+    @DeleteMapping("/blog/delete")
+    public Result deleteBlogImg(@RequestParam("url") String fileUrl) {
+        fileService.delete(fileUrl);
         return Result.ok();
-    }
-
-    private String createNewFileName(String originalFilename) {
-        // 获取后缀
-        String suffix = StrUtil.subAfter(originalFilename, ".", true);
-        // 生成目录
-        String name = UUID.randomUUID().toString();
-        int hash = name.hashCode();
-        int d1 = hash & 0xF;
-        int d2 = (hash >> 4) & 0xF;
-        // 判断目录是否存在
-        File dir = new File(SystemConstants.IMAGE_UPLOAD_DIR, StrUtil.format("/blogs/{}/{}", d1, d2));
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-        // 生成文件名
-        return StrUtil.format("/blogs/{}/{}/{}.{}", d1, d2, name, suffix);
     }
 }

@@ -7,15 +7,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Redisson 配置 — 分布式锁客户端
+ */
 @Configuration
 public class RedissonConfig {
-    @Value(value = "${spring.redis.host}")
+    @Value(value = "${spring.data.redis.host}")
     private String redisHost;
 
-    @Value(value = "${spring.redis.port}")
+    @Value(value = "${spring.data.redis.port}")
     private Integer redisPort;
 
-    @Value(value = "${spring.redis.password}")
+    @Value(value = "${spring.data.redis.password}")
     private String redisPassword;
 
     @Bean

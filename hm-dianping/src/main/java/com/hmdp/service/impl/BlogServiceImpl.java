@@ -13,8 +13,8 @@ import com.hmdp.mapper.BlogMapper;
 import com.hmdp.service.IBlogService;
 import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.redis.RedisConstants;
+import com.hmdp.utils.constants.SystemConstants;
 import com.hmdp.utils.UserHolder;
 import jodd.util.StringUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -34,6 +34,9 @@ import java.util.*;
  *
  * @author 虎哥
  * @since 2021-12-22
+ */
+/**
+ * 探店笔记服务实现 — 笔记CRUD、点赞（Redis ZSet）、关注者Feed流（推模式）
  */
 @Service
 @Slf4j

@@ -6,6 +6,10 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/**
+ * 统一响应体 — 所有API返回此对象
+ * success=true 表示成功，errorMsg 为失败原因，data 为负载数据，total 为分页总数（暂未使用）
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
