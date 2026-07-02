@@ -68,16 +68,24 @@ public class UserController {
     }
 
     /**
-     * 登出功能 — 删除 Redis 中该用户的所有 Token/Version 记录
+     * 登出功能 — 删除 Redis 中该用户的所有 Token/Version 记录，并清除客户端 Cookie
      */
     @PostMapping("/logout")
-    public Result logout(){
+    public Result logout(HttpServletResponse response){
         Long userId = UserHolder.getUserId();
         if (userId == null) {
             return Result.fail("未登录");
         }
         userService.logout(userId);
         UserHolder.remove();
+        // 清除客户端 access_token（前端 localStorage 不再更新）
+        response.setHeader("authorization", "");
+        // 清除客户端 refresh_token Cookie（MaxAge=0 使浏览器立即删除）
+        Cookie clearCookie = new Cookie("refresh_token", null);
+        clearCookie.setHttpOnly(true);
+        clearCookie.setPath("/");
+        clearCookie.setMaxAge(0);
+        response.addCookie(clearCookie);
         log.info("用户登出成功 userId={}", userId);
         return Result.ok();
     }

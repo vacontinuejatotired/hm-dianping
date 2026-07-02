@@ -18,13 +18,11 @@ public class LoginInterceptor implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         String method = request.getMethod();
         String authHeader = request.getHeader("authorization");
-        String refreshHeader = request.getHeader("Refresh-Token");
 
         if (UserHolder.getUserId() == null) {
-            log.warn("【登录拦截】请求被拒绝401, URI={} {}, authorization头={}, Refresh-Token头={}, UserHolder.userId=null, UserHolder.userDTO={}",
+            log.warn("【登录拦截】请求被拒绝401, URI={} {}, authorization头={}, UserHolder.userId=null, UserHolder.userDTO={}",
                     method, requestURI,
                     authHeader != null ? maskToken(authHeader) : "null",
-                    refreshHeader != null ? maskToken(refreshHeader) : "null",
                     UserHolder.getUserDTO());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return false;

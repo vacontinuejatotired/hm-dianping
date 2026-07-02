@@ -23,6 +23,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
+import org.springframework.context.annotation.Lazy;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -37,6 +38,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Resource
     private StringRedisTemplate stringRedisTemplate;
     @Resource
+    @Lazy
     private AuthService authService;
 
     @Override
@@ -205,7 +207,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_CODE_KEY + phone, code, RedisConstants.LOGIN_CODE_TTL, TimeUnit.MINUTES);
         stringRedisTemplate.opsForValue().set(freqKey, "1", 60, TimeUnit.SECONDS);
         log.info("send code {} success", code);
-        return Result.ok();
+        // DEV ONLY: 返回验证码便于开发调试，生产环境应移除
+        return Result.ok(code);
     }
 
     @Override
