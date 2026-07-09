@@ -4,6 +4,8 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Blog;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 /**
  * <p>
  *  服务类
@@ -27,5 +29,14 @@ public interface IBlogService extends IService<Blog> {
 
     Result saveBlog(Blog blog);
 
+    /** 更新博客图片列表 — 上传完成后调用，JSON 数组接收 */
+    Result updateBlogImages(Long id, List<String> images);
+
     Result queryBlogOfFollow(Long max, Integer offset);
+
+    /** 查询某个用户的所有笔记（分页），含作者信息和点赞状态 */
+    Result queryByUserId(Long id, Integer current);
+
+    /** 查询当前登录用户的笔记（分页），含作者信息和点赞状态 */
+    Result queryMyBlog(Integer current);
 }

@@ -4,7 +4,9 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.hmdp.entity.User;
+import com.hmdp.entity.UserInfo;
 import com.hmdp.entity.UserinfoCache;
+import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,8 @@ import java.util.concurrent.TimeUnit;
 public class BatchLoadCache {
     @Resource
     private IUserService userService;
+    @Resource
+    private IUserInfoService userInfoService;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
@@ -144,7 +148,15 @@ public class BatchLoadCache {
         Set<Long> validValueUserIds = new HashSet<>(userIds.size());
         Map<String,Map> validUsersInRedis = new HashMap<>(userIds.size());
         Map<String,Map> invalidUsersInRedis = new HashMap<>(userIds.size());
-        List<User> userList = userService.query().in("id", userIds).select("id","nick_name","icon").list();
+        List<User> userList = userService.query().in("id", userIds).select("id").list();
+        // nickName、icon 已迁移到 tb_user_info，批量查询
+        List<UserInfo> userInfoList = userInfoService.listByIds(userIds);
+        Map<Long, String> nickNameMap = new HashMap<>(userInfoList.size());
+        Map<Long, String> iconMap = new HashMap<>(userInfoList.size());
+        for (UserInfo ui : userInfoList) {
+            nickNameMap.put(ui.getUserId(), ui.getNickName());
+            iconMap.put(ui.getUserId(), ui.getIcon());
+        }
         UserinfoCache userinfoCache  =new UserinfoCache();
         for (User user : userList) {
             //mysql没查到的用户则让redis存空值，本地也存空值
@@ -159,8 +171,8 @@ public class BatchLoadCache {
             }
             else {
                 userinfoCache.setId(user.getId());
-                userinfoCache.setNickName(user.getNickName());
-                userinfoCache.setIcon(user.getIcon());
+                userinfoCache.setNickName(nickNameMap.getOrDefault(user.getId(), ""));
+                userinfoCache.setIcon(iconMap.getOrDefault(user.getId(), ""));
                 validValueUserIds.add(user.getId());
                 validUsersInRedis.put(key,convertUserinfoCacheToMap(userinfoCache));
             }
@@ -250,7 +262,10 @@ public class BatchLoadCache {
                 userinfoCache = new UserinfoCache(userId,"","");
             }
             else{
-                userinfoCache = new UserinfoCache(user.getId(),user.getNickName(),user.getIcon());
+                UserInfo userInfo = userInfoService.getById(userId);
+                String nickName = userInfo != null ? userInfo.getNickName() : "";
+                String icon = userInfo != null ? userInfo.getIcon() : "";
+                userinfoCache = new UserinfoCache(user.getId(), nickName, icon);
             }
             Map<String, Object> userInfoMap = BeanUtil.beanToMap(userinfoCache, new HashMap<>(),
                     CopyOptions.create().setIgnoreNullValue(true)

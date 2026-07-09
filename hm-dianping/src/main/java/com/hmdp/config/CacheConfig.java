@@ -38,14 +38,10 @@ public class CacheConfig {
                 .initialCapacity(1000).recordStats().refreshAfterWrite(CaffeineConstants.USERINFO_ASYNC_REFRESH_THRESHOLD_MINUTES,TimeUnit.MINUTES).build(new CacheLoader<String, UserinfoCache>() {
                     @Override
                     public @Nullable UserinfoCache load(@NonNull String key) throws Exception {
-                        // 缓存缺失时加载（第一次调用）
+                        // 缓存缺失时：返回空值不阻塞，触发异步批量加载（由 BatchLoadCache 定时任务填充）
                         Long userId = Long.valueOf(key.substring(CaffeineConstants.USERINFO_CACHE_KEY.length()));
                         batchLoadCache.saveFuture(userId);
-                        UserinfoCache userinfoCache = new UserinfoCache();
-                        userinfoCache.setId(userId);
-                        userinfoCache.setIcon("");
-                        userinfoCache.setNickName("");
-                        return userinfoCache;
+                        return new UserinfoCache(userId, "", "");
                     }
 
                     @Override

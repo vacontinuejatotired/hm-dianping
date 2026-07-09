@@ -3,6 +3,7 @@ package com.hmdp.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.PasswordChangeDTO;
+import com.hmdp.dto.ProfileUpdateDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.TokenPair;
 import com.hmdp.entity.User;
@@ -27,6 +28,9 @@ public interface IUserService extends IService<User> {
     void logout(Long userId);
 
     TokenPair changePassword(PasswordChangeDTO dto);
+
+    /** 编辑个人资料 — nickName/icon/city/introduce 均为可选 */
+    Result updateProfile(ProfileUpdateDTO dto);
 
     Result sign();
 

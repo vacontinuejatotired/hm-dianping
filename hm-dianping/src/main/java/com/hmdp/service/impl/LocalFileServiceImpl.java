@@ -51,11 +51,22 @@ public class LocalFileServiceImpl implements FileService {
                 log.warn("路径穿越拦截: {} -> {}", fileUrl, canonicalPath);
                 return false;
             }
+            // 文件不存在时记录警告并返回 false
+            if (!file.exists()) {
+                log.warn("文件不存在，删除失败: {}", fileUrl);
+                return false;
+            }
         } catch (IOException e) {
             log.error("路径解析失败: {}", fileUrl, e);
             return false;
         }
-        return FileUtil.del(file);
+        boolean deleted = FileUtil.del(file);
+        if (deleted) {
+            log.info("文件删除成功: {}", fileUrl);
+        } else {
+            log.warn("文件删除失败: {}", fileUrl);
+        }
+        return deleted;
     }
 
     @Override

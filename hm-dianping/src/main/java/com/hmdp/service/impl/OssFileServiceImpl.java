@@ -4,7 +4,6 @@ import cn.hutool.core.util.StrUtil;
 import com.aliyun.oss.OSS;
 import com.hmdp.config.OssProperties;
 import com.hmdp.service.FileService;
-import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -45,10 +44,15 @@ public class OssFileServiceImpl implements FileService {
 
     @Override
     public boolean delete(String fileUrl) {
-        String key = extractKeyFromUrl(fileUrl);
-        ossClient.deleteObject(ossProperties.getBucket(), key);
-        log.info("OSS 删除成功 key={}, bucket={}", key, ossProperties.getBucket());
-        return true;
+        try {
+            String key = extractKeyFromUrl(fileUrl);
+            ossClient.deleteObject(ossProperties.getBucket(), key);
+            log.info("OSS 删除成功 key={}, bucket={}", key, ossProperties.getBucket());
+            return true;
+        } catch (Exception e) {
+            log.error("OSS 删除失败 fileUrl={}", fileUrl, e);
+            return false;
+        }
     }
 
     @Override
@@ -57,6 +61,11 @@ public class OssFileServiceImpl implements FileService {
     }
 
     private String extractKeyFromUrl(String fileUrl) {
-        return URI.create(fileUrl).getPath().substring(1);
+        try {
+            return URI.create(fileUrl).getPath().substring(1);
+        } catch (Exception e) {
+            log.error("解析文件 URL 失败: {}", fileUrl, e);
+            throw new IllegalArgumentException("无效的文件 URL: " + fileUrl, e);
+        }
     }
 }

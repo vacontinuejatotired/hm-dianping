@@ -5,7 +5,9 @@ import com.hmdp.config.CookieConfig;
 import com.hmdp.dto.TokenPair;
 import com.hmdp.dto.ValidationResult;
 import com.hmdp.entity.UserinfoCache;
+import com.hmdp.entity.UserInfo;
 import com.hmdp.service.AuthService;
+import com.hmdp.service.IUserInfoService;
 import com.hmdp.utils.UserHolder;
 import com.hmdp.utils.cache.CaffeineConstants;
 import jakarta.annotation.Resource;
@@ -33,6 +35,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     private StringRedisTemplate stringRedisTemplate;
     @Resource(name = "userinfoCache")
     private LoadingCache<String, UserinfoCache> userinfoCaffeine;
+    @Resource
+    private IUserInfoService userInfoService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -47,14 +51,10 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 log.warn("【Token拦截】缺少authorization请求头, URI={} {}", method, requestURI);
                 return false;
             }
-
-            String token = request.getHeader("Authorization");
+// 统一全小写 authorization，getHeader 大小写不敏感无需 fallback
+            String token = request.getHeader("authorization");
             if (token != null && token.startsWith("Bearer ")) {
                 token = token.substring(7);
-            }
-            // 兼容旧的 authorization 头（全小写 + 无 Bearer 前缀）
-            if (token == null) {
-                token = request.getHeader("authorization");
             }
 
             // Refresh Token 从 httpOnly Cookie 读取，JS 不可访问
@@ -112,6 +112,11 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 return true;
             }
             try {
+                if(result.getVersion() == null) {
+                    log.warn("【Token拦截】无法获取 version, result={}", result);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return false;
+                }
                 TokenPair newPair = authService.refreshTokenPair(
                         token, refreshToken, userId, result.getVersion(), isExpired);
 
@@ -166,6 +171,16 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             UserHolder.saveUserId(userId);
             String userInfoKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
             UserinfoCache cache = userinfoCaffeine.get(userInfoKey);
+            // Caffeine load 返回空 nickName/icon 时不阻塞等待异步加载
+            // 兜底：从 DB 同步查一次并回填缓存，确保首次请求拿到正确数据
+            if (cache.getNickName() == null || cache.getNickName().isEmpty()) {
+                UserInfo userInfo = userInfoService.getById(userId);
+                if (userInfo != null) {
+                    cache.setNickName(userInfo.getNickName());
+                    cache.setIcon(userInfo.getIcon());
+                    userinfoCaffeine.put(userInfoKey, cache);
+                }
+            }
             UserHolder.saveUserDTO(cache);
             return true;
         } catch (Exception e) {

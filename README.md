@@ -4,11 +4,12 @@
 
 ## 技术栈
 
-- 后端：SpringBoot、MyBatis
-- 数据库：MySQL
-- 缓存：Redis（Lua 脚本、Hash、分布式锁）
-- 消息队列：RabbitMQ（可靠投递、幂等）
-- 工具：Maven、Git、JMeter（压测）、Docker,Arthas
+- 后端：SpringBoot、MyBatis-Plus
+- 数据库：MySQL、Redis
+- 缓存：Caffeine（本地缓存）、Redis（Lua 脚本、Hash、分布式锁）
+- 消息队列：RabbitMQ（Confirm 机制、幂等消费）
+- 文件存储：本地文件 / 阿里云 OSS（双实现，通过 @Profile 切换）
+- 工具：Maven、Git、JMeter（压测）、Docker、Arthas
 
 ## 用户认证与安全优化
 
@@ -25,6 +26,17 @@
 [查看Refresh拦截器流程](md/refresh-token-interceptor-flow.md)  
 [查看压测报告](md/下单优化压测报告.md)  
 [查看刷新过期Token流程](md/refresh-expired-token-flow.md)
+
+- **密码登录**：在原有验证码登录基础上增加了密码登录，使用 BCrypt 加密存储，含账户锁定（连续 10 次失败锁 30 分钟）和失败频率限制。
+
+## 文件上传优化
+
+接入阿里云 OSS 图片存储，通过 `FileService` 接口统一上传逻辑，dev 环境走本地文件，prod 环境走 OSS。
+
+- **FileService 接口**：定义 upload/delete/getDomain，通过 `@Profile` 切换实现
+- **文件校验**：白名单 jpg/png/gif/webp，大小限制 5MB
+- **Object Key 散列**：`{module}/{d1}/{d2}/{uuid}.{ext}` 格式，避免 OSS 单目录超限
+
 ## 高并发库存扣减优化
 
 针对高并发下单场景，原直接扣减数据库易导致锁竞争和延迟，采用Redis预减库存 + 异步消息落库方案。库存扣减逻辑使用Lua脚本原子执行，消息通过RabbitMQ可靠投递。
@@ -78,9 +90,11 @@ Docker部署Redis/RabbitMQ + 本机Spring Boot 空接口压测结果：JMeter 55
 - 刷新临期token Lua 脚本：`src/main/resources/refreshToken.lua`（原子刷新Token）
 - 刷新过期token Lua 脚本：`src/main/resources/refreshExpiredToken.lua`（处理过期Token续期）
 - 库存扣减 Lua 脚本：`src/main/resources/MqSeckill.lua`（库存检查、扣减、重复校验）
-- 拦截器与令牌逻辑：`src/main/java/com/hmdp/interceptor/RefreshTokenInterceptor.java`（Token验证和刷新）
-- 批量缓存加载工具：`src/main/java/com/hmdp/utils/BatchLoadCache.java`（异步批量加载用户缓存）
-- 分布式ID生成工具：`src/main/java/com/hmdp/utils/RedisIdWorker.java`（雪花算法ID生成）
+- 拦截器与令牌逻辑：`src/main/java/com/hmdp/interceptor/RefreshTokenInterceptor.java`（Token验证和刷新，委托 AuthService）
+- 认证服务：`src/main/java/com/hmdp/service/AuthService.java`（Token 生成/校验/刷新）
+- 批量缓存加载工具：`src/main/java/com/hmdp/utils/cache/BatchLoadCache.java`（异步批量加载用户缓存）
+- 分布式ID生成工具：`src/main/java/com/hmdp/utils/redis/RedisIdWorker.java`（雪花算法ID生成 + 预生成队列）
 - Caffeine缓存配置：`src/main/java/com/hmdp/config/CacheConfig.java`（本地缓存配置）
+- 文件上传接口：`src/main/java/com/hmdp/service/FileService.java`（本地/OSS 双实现）
 - 测试脚本: '空接口耗时.jmx'（JMeter测试脚本）
-最后更新：2026 年 3 月
+最后更新：2026 年 7 月

@@ -29,6 +29,16 @@ public class UserInfo implements Serializable {
     private Long userId;
 
     /**
+     * 昵称（从 tb_user.nick_name 迁移至此）
+     */
+    private String nickName = "";
+
+    /**
+     * 人物头像（从 tb_user.icon 迁移至此）
+     */
+    private String icon = "";
+
+    /**
      * 城市名称
      */
     private String city;
