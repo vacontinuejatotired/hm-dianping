@@ -86,7 +86,6 @@ public class TokenTestUtil {
             if (!existingPhones.contains(phone)) {
                 User newUser = new User()
                         .setPhone(phone)
-                        .setNickName(SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomString(6))
                         .setCreateTime(LocalDateTime.now())
                         .setUpdateTime(LocalDateTime.now());
                 newUsers.add(newUser);

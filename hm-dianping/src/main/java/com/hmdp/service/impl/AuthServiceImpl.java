@@ -144,8 +144,10 @@ public class AuthServiceImpl implements AuthService {
             return builder.valid(true).needsRefresh(needsRefresh).build();
 
         } catch (ExpiredJwtException e) {
-            log.info("Token 已过期，userId={}", e.getClaims().get("userId"));
+            Long versionFromToken = e.getClaims().get("version", Long.class);
+            log.info("Token 已过期，userId={}，version={}", e.getClaims().get("userId"), versionFromToken); 
             return builder.userId(e.getClaims().get("userId", Long.class))
+                    .version(versionFromToken)
                     .needsRefresh(true).build();
         } catch (JwtException e) {
             log.warn("JWT 校验失败: {}", e.getMessage());
