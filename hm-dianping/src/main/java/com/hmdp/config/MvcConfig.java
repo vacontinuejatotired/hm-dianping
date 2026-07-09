@@ -28,6 +28,6 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/test/restart/**").order(1);
         registry.addInterceptor(refreshTokenInterceptor).addPathPatterns("/**").excludePathPatterns(
                 "/blog/hot","/user/login","/user/code","/shop-type/list","/test/restart/**",
-                "/shop/**","/voucher/**").order(0);
+                "/shop/**","/voucher/**","/imgs/**").order(0);
     }
 }
