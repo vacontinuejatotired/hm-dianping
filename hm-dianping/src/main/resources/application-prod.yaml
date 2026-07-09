@@ -19,14 +19,18 @@ spring:
     name: hmdp
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://prod-host:3307/heima?useSSL=true&serverTimezone=UTC
+    url: jdbc:mysql://localhost:3307/heima?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
-    password: 123456
+    password: ${DB_PASSWORD:123456}
     hikari:
       maximum-pool-size: 50
       minimum-idle: 10
   jackson:
     default-property-inclusion: non_null
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
   data:
     redis:
       host: 192.168.49.130
@@ -62,6 +66,7 @@ app:
     same-site: None
     secure: true
   oss:
+    region: cn-beijing
     endpoint: oss-cn-beijing.aliyuncs.com
     bucket: ntwitm1
     access-key-id: ${OSS_ACCESS_KEY_ID}

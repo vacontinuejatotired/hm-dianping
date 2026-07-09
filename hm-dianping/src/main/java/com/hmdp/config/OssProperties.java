@@ -17,6 +17,9 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.oss")
 public class OssProperties {
 
+    /** OSS 地域，例如 oss-cn-beijing */
+    private String region;
+
     /** OSS 地域节点，例如 oss-cn-hangzhou.aliyuncs.com */
     private String endpoint;
 

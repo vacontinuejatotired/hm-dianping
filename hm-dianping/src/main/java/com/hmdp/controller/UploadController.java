@@ -8,7 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Set;
 
 /**
@@ -25,32 +28,66 @@ public class UploadController {
 
     private static final Set<String> ALLOWED_TYPES = Set.of("jpg", "jpeg", "png", "gif", "webp");
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024L;
+    private static final int MAX_IMAGE_WIDTH = 4096;
+    private static final int MAX_IMAGE_HEIGHT = 4096;
 
     @PostMapping("blog")
-    public Result uploadImage(@RequestParam("file") MultipartFile image) {
+    public Result uploadImage(
+            @RequestParam("file") MultipartFile image,
+            @RequestParam("blogId") Long blogId) {
         try {
+            // === ① 文件名非空校验 ===
             String originalFilename = image.getOriginalFilename();
-            // 文件类型校验
+            if (originalFilename == null || originalFilename.isBlank()) {
+                return Result.fail("文件名不能为空");
+            }
+
+            // === ② 文件扩展名校验 ===
             String ext = StrUtil.subAfter(originalFilename, ".", true).toLowerCase();
+            if (StrUtil.isBlank(ext)) {
+                return Result.fail("文件无扩展名，无法识别类型");
+            }
             if (!ALLOWED_TYPES.contains(ext)) {
                 return Result.fail("不支持的文件类型，仅允许: " + ALLOWED_TYPES);
             }
-            // 文件大小校验
+
+            // === ③ 文件大小校验 ===
             if (image.getSize() > MAX_FILE_SIZE) {
                 return Result.fail("文件过大，最大允许 5MB");
             }
-            // 委托 FileService 上传，返回完整 URL
-            String url = fileService.upload(image.getInputStream(), originalFilename, "blogs");
-            log.debug("文件上传成功，{}", url);
+
+            // === ④ MIME/魔数校验 — 通过 ImageIO 读取文件头 ===
+            InputStream inputStream = image.getInputStream();
+            BufferedImage bufferedImage = ImageIO.read(inputStream);
+            if (bufferedImage == null) {
+                return Result.fail("文件内容无法识别为有效图片");
+            }
+
+            // === ⑤ 像素尺寸限制 ===
+            int width = bufferedImage.getWidth();
+            int height = bufferedImage.getHeight();
+            if (width > MAX_IMAGE_WIDTH || height > MAX_IMAGE_HEIGHT) {
+                return Result.fail("图片尺寸过大，最大允许 " + MAX_IMAGE_WIDTH + "×" + MAX_IMAGE_HEIGHT + " 像素");
+            }
+
+            // === ⑥ 委托 FileService 上传 ===
+            // module = "blogs/{blogId}"，blogId 做目录分组，替代 d1/d2 哈希散列
+            String url = fileService.upload(image.getInputStream(), originalFilename, "blogs/" + blogId);
+            log.info("文件上传成功，blogId={}, url={}", blogId, url);
             return Result.ok(url);
         } catch (IOException e) {
-            throw new RuntimeException("文件上传失败", e);
+            log.error("文件上传 IO 异常", e);
+            return Result.fail("文件上传失败: " + e.getMessage());
         }
     }
 
     @DeleteMapping("/blog/delete")
     public Result deleteBlogImg(@RequestParam("url") String fileUrl) {
-        fileService.delete(fileUrl);
+        boolean deleted = fileService.delete(fileUrl);
+        if (!deleted) {
+            log.warn("文件删除失败或不存在: {}", fileUrl);
+            return Result.fail("文件删除失败");
+        }
         return Result.ok();
     }
 }

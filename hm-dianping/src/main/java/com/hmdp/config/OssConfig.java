@@ -31,6 +31,7 @@ public class OssConfig {
         config.setSignatureVersion(SignVersion.V4);
 
         return OSSClientBuilder.create()
+                .region(ossProperties.getRegion())
                 .endpoint(ossProperties.getEndpoint())
                 .credentialsProvider(credentialsProvider)
                 .clientConfiguration(config)
