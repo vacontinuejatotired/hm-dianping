@@ -38,16 +38,6 @@ public class User implements Serializable {
     private String password;
 
     /**
-     * 昵称，默认是随机字符
-     */
-    private String nickName;
-
-    /**
-     * 用户头像
-     */
-    private String icon = "";
-
-    /**
      * 创建时间
      */
     private LocalDateTime createTime;

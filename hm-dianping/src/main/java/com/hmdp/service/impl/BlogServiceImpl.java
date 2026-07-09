@@ -8,11 +8,11 @@ import com.hmdp.dto.ScrollResult;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
 import com.hmdp.entity.Follow;
-import com.hmdp.entity.User;
+import com.hmdp.entity.UserInfo;
 import com.hmdp.mapper.BlogMapper;
 import com.hmdp.service.IBlogService;
 import com.hmdp.service.IFollowService;
-import com.hmdp.service.IUserService;
+import com.hmdp.service.IUserInfoService;
 import com.hmdp.utils.redis.RedisConstants;
 import com.hmdp.utils.constants.SystemConstants;
 import com.hmdp.utils.UserHolder;
@@ -24,6 +24,7 @@ import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
+import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -42,9 +43,9 @@ import java.util.*;
 @Slf4j
 public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IBlogService {
     @Resource
-    private IUserService userService;
-    @Resource
     private IFollowService followService;
+    @Resource
+    private IUserInfoService userInfoService;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
@@ -76,9 +77,10 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
     private void setUserToBlog(Blog blog) {
         Long userId = blog.getUserId();
-        User user = userService.getById(userId);
-        blog.setName(user.getNickName());
-        blog.setIcon(user.getIcon());
+        // nickName、icon 已从 tb_user 迁移到 tb_user_info
+        UserInfo userInfo = userInfoService.getById(userId);
+        blog.setName(userInfo != null ? userInfo.getNickName() : "");
+        blog.setIcon(userInfo != null ? userInfo.getIcon() : "");
     }
 
     private void isLiked(Blog blog) {
@@ -128,12 +130,16 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         userIds = userDTOList.stream().map(Long::valueOf).toList();
         String idStr = StringUtil.join(userIds, ",");
 
-        List<UserDTO> userDTOS = userService.query()
-                .in("id", userDTOList)
-                .last("order by field (id," + idStr + ")")
+        List<UserDTO> userDTOS = userInfoService.query()
+                .in("user_id", userDTOList)
+                .last("order by field (user_id," + idStr + ")")
                 .list()
                 .stream()
-                .map(user -> BeanUtil.copyProperties(user, UserDTO.class))
+                .map(info -> {
+                    UserDTO dto = BeanUtil.copyProperties(info, UserDTO.class);
+                    dto.setId(info.getUserId());
+                    return dto;
+                })
                 .toList();
         return Result.ok(userDTOS);
     }
@@ -142,18 +148,39 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     public Result saveBlog(Blog blog) {
         Long user = UserHolder.getUserId();
         blog.setUserId(user);
+        blog.setImages("");          // 初始无图片，创建草稿
         boolean isSuccess = save(blog);
         if (!isSuccess) {
             return Result.fail("新增笔记失败");
         }
-        //拿到所有的粉丝账号id
-        List<Follow> followsUserId = followService.query().eq("follow_user_id", user).list();
-        for (Follow follow : followsUserId) {
-            Long userId = follow.getUserId();
-            String key = "feed:" + userId;
-            stringRedisTemplate.opsForZSet().add(key, blog.getId().toString(), System.currentTimeMillis());
+        // 注意：此时不推送 Feed，等图片上传完成后 updateBlogImages 再推送
+        return Result.ok(blog.getId());
+    }
+
+    @Override
+    @Transactional
+    public Result updateBlogImages(Long id, List<String> images) {
+        // 1. 校验博客存在
+        Blog blog = getById(id);
+        if (blog == null) {
+            return Result.fail("博客不存在");
         }
-//        pushBloToFansBatch(followsUserId, blog.getId());
+        // 2. 校验作者身份 (S3)
+        Long userId = UserHolder.getUserId();
+        if (!userId.equals(blog.getUserId())) {
+            return Result.fail("无权修改他人博客");
+        }
+        // 3. List<String> → 逗号分隔字符串（API 用 JSON 数组，DB 兼容存量数据）
+        String imagesStr = (images == null || images.isEmpty()) ? "" : String.join(",", images);
+        blog.setImages(imagesStr);
+        boolean ok = updateById(blog);
+        if (!ok) {
+            return Result.fail("更新失败");
+        }
+        // 4. 首次设置图片时推送 Feed 给粉丝
+        List<Follow> follows = followService.query().eq("follow_user_id", userId).list();
+        pushBloToFansBatch(follows, id);
+        log.info("博客图片更新成功, blogId={}, images={}", id, imagesStr);
         return Result.ok();
     }
     //抽取方法，实现批量插入，防止N次连接
@@ -222,5 +249,32 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         log.info("即将返回页面对象{}",result);
 
         return Result.ok(result);
+    }
+
+    @Override
+    public Result queryByUserId(Long id, Integer current) {
+        Page<Blog> page = query()
+                .eq("user_id", id)
+                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
+        List<Blog> records = page.getRecords();
+        records.forEach(blog -> {
+            setUserToBlog(blog);
+            isLiked(blog);
+        });
+        return Result.ok(records);
+    }
+
+    @Override
+    public Result queryMyBlog(Integer current) {
+        Long userId = UserHolder.getUserId();
+        Page<Blog> page = query()
+                .eq("user_id", userId)
+                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
+        List<Blog> records = page.getRecords();
+        records.forEach(blog -> {
+            setUserToBlog(blog);
+            isLiked(blog);
+        });
+        return Result.ok(records);
     }
 }
