@@ -5,12 +5,17 @@ import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.PasswordChangeDTO;
+import com.hmdp.dto.ProfileUpdateDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.TokenPair;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
+import com.hmdp.entity.UserInfo;
+import com.hmdp.entity.UserinfoCache;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.AuthService;
+import com.hmdp.service.FileService;
+import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.UserHolder;
@@ -18,6 +23,8 @@ import com.hmdp.utils.constants.SystemConstants;
 import com.hmdp.utils.redis.RedisConstants;
 import com.hmdp.utils.security.PasswordEncoder;
 import lombok.extern.slf4j.Slf4j;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.hmdp.utils.cache.CaffeineConstants;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -40,6 +47,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Resource
     @Lazy
     private AuthService authService;
+    @Resource
+    private IUserInfoService userInfoService;
+    @Resource
+    private FileService fileService;
+    @Resource(name = "userinfoCache")
+    private LoadingCache<String, UserinfoCache> userinfoCaffeine;
 
     @Override
 //    @Transactional(rollbackFor = SQLException.class)
@@ -128,11 +141,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 查用户 → 不存在则自动创建
         User user = query().eq("phone", phone).one();
         if (user == null) {
+            String nickName = SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomNumbers(6);
             user = new User().setPhone(phone)
-                    .setNickName(SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomNumbers(6))
                     .setCreateTime(LocalDateTime.now())
                     .setUpdateTime(LocalDateTime.now());
             save(user);
+            // 同步创建 UserInfo 记录（nickName 已迁移至此）
+            UserInfo newInfo = new UserInfo();
+            newInfo.setUserId(user.getId());
+            newInfo.setNickName(nickName);
+            userInfoService.save(newInfo);
             log.info("新用户已创建 phone={}, userId={}", phone, user.getId());
         }
 
@@ -192,6 +210,60 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Override
     public void logout(Long userId) {
         authService.revokeTokens(userId);
+    }
+
+    @Override
+    public Result updateProfile(ProfileUpdateDTO dto) {
+        Long userId = UserHolder.getUserId();
+
+        // 更新 UserInfo 表（nickName, icon, city, introduce）
+        UserInfo userInfo = new UserInfo();
+        userInfo.setUserId(userId);
+        boolean needUpdateInfo = false;
+        if (dto.getNickName() != null) {
+            String nickName = dto.getNickName().strip();
+            if (nickName.isEmpty()) {
+                return Result.fail("昵称不能为空");
+            }
+            userInfo.setNickName(nickName);
+            needUpdateInfo = true;
+        }
+        if (dto.getIcon() != null) {
+            // 新旧 icon 不同时删除旧文件
+            UserInfo oldInfo = userInfoService.getById(userId);
+            if (oldInfo != null
+                    && oldInfo.getIcon() != null && !oldInfo.getIcon().isEmpty()
+                    && !oldInfo.getIcon().equals(dto.getIcon())) {
+                fileService.delete(oldInfo.getIcon());
+                log.info("已删除旧头像: userId={}, oldIcon={}", userId, oldInfo.getIcon());
+            }
+            userInfo.setIcon(dto.getIcon());
+            needUpdateInfo = true;
+        }
+        if (dto.getCity() != null) {
+            userInfo.setCity(dto.getCity());
+            needUpdateInfo = true;
+        }
+        if (dto.getIntroduce() != null) {
+            userInfo.setIntroduce(dto.getIntroduce());
+            needUpdateInfo = true;
+        }
+        if (needUpdateInfo) {
+            userInfoService.updateById(userInfo);
+            // 更新 Caffeine 本地缓存，确保 GET /user/me 立即返回新值
+            String userInfoKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
+            UserinfoCache cache = userinfoCaffeine.getIfPresent(userInfoKey);
+            if (cache != null) {
+                if (dto.getNickName() != null) cache.setNickName(dto.getNickName().strip());
+                if (dto.getIcon() != null) cache.setIcon(dto.getIcon());
+                userinfoCaffeine.put(userInfoKey, cache);
+                log.debug("已更新用户缓存 userId={}", userId);
+            }
+        }
+
+        log.info("用户 {} 更新个人资料: nickName={}, icon={}, city={}, introduce={}",
+                userId, dto.getNickName(), dto.getIcon(), dto.getCity(), dto.getIntroduce());
+        return Result.ok();
     }
 
     @Override

@@ -5,11 +5,13 @@ import cn.hutool.core.bean.BeanUtil;
 import com.hmdp.config.CookieConfig;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.PasswordChangeDTO;
+import com.hmdp.dto.ProfileUpdateDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.TokenPair;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.entity.UserInfo;
+import com.hmdp.service.FileService;
 import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
@@ -17,10 +19,13 @@ import com.hmdp.utils.cache.CacheClient;
 import com.hmdp.utils.redis.RedisConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -45,6 +50,11 @@ public class UserController {
     private CacheClient cacheClient;
     @Resource
     private CookieConfig cookieConfig;
+    @Resource
+    private FileService fileService;
+
+    private static final Set<String> ALLOWED_ICON_TYPES = Set.of("jpg", "jpeg", "png", "gif", "webp");
+    private static final long MAX_ICON_SIZE = 2 * 1024 * 1024L;
 
     /**
      * 发送手机验证码
@@ -111,6 +121,12 @@ public class UserController {
             return Result.ok();
         }
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
+        // nickName、icon 已迁移到 tb_user_info，需要额外查询
+        UserInfo userInfo = userInfoService.getById(userId);
+        if (userInfo != null) {
+            userDTO.setNickName(userInfo.getNickName());
+            userDTO.setIcon(userInfo.getIcon());
+        }
         return Result.ok(userDTO);
     }
     @GetMapping("/info/{id}")
@@ -153,6 +169,56 @@ public class UserController {
         setRefreshTokenCookie(response, tokenPair.getRefreshToken());
         log.info("密码修改成功 userId={}", UserHolder.getUserId());
         return Result.ok();
+    }
+
+    /**
+     * 编辑个人资料 — multipart/form-data 方式
+     * @param iconFile  头像文件（可选），上传到 OSS/icons/ 目录
+     * @param nickName  昵称（可选）
+     * @param city      城市（可选）
+     * @param introduce 个人简介（可选）
+     */
+    @PutMapping("/profile")
+    public Result updateProfile(
+            @RequestParam(required = false) MultipartFile iconFile,
+            @RequestParam(required = false) String nickName,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String introduce) throws IOException {
+
+        String iconUrl = null;
+        if (iconFile != null && !iconFile.isEmpty()) {
+            iconUrl = uploadIcon(iconFile);
+        }
+
+        ProfileUpdateDTO dto = new ProfileUpdateDTO();
+        dto.setNickName(blankToNull(nickName));
+        dto.setCity(blankToNull(city));
+        dto.setIntroduce(blankToNull(introduce));
+        dto.setIcon(iconUrl);
+        return userService.updateProfile(dto);
+    }
+
+    /** 空字符串转 null，避免 Service 层误将空串当作有效值 */
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.strip();
+    }
+
+    /**
+     * 上传头像到 FileService（icons/ 目录），含基本校验
+     */
+    private String uploadIcon(MultipartFile iconFile) throws IOException {
+        String originalFilename = iconFile.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new IllegalArgumentException("文件名不能为空");
+        }
+        String ext = cn.hutool.core.util.StrUtil.subAfter(originalFilename, ".", true).toLowerCase();
+        if (!ALLOWED_ICON_TYPES.contains(ext)) {
+            throw new IllegalArgumentException("不支持的头像格式，仅允许: " + ALLOWED_ICON_TYPES);
+        }
+        if (iconFile.getSize() > MAX_ICON_SIZE) {
+            throw new IllegalArgumentException("头像文件过大，最大允许 2MB");
+        }
+        return fileService.upload(iconFile.getInputStream(), originalFilename, "icons");
     }
 
     /**
