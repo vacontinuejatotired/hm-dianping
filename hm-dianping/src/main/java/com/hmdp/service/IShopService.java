@@ -2,6 +2,9 @@ package com.hmdp.service;
 
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
+
+import java.util.List;
+
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -21,5 +24,7 @@ public interface IShopService extends IService<Shop> {
 
     Result updateShop(Shop shop);
 
-    Result queryShopByType(Integer typeId, Integer current, Double x, Double y);
+    Result queryShopByType(Integer typeId, Integer current, Double x, Double y, String sortBy);
+
+    List<Shop> getHotShop(Double x, Double y, Integer typeId);
 }

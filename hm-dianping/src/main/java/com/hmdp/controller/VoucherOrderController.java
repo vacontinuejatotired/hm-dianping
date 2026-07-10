@@ -3,6 +3,7 @@ package com.hmdp.controller;
 
 import com.hmdp.dto.Result;
 import com.hmdp.service.IVoucherOrderService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,15 +23,18 @@ import jakarta.annotation.Resource;
 @RestController
 @RequestMapping("/voucher-order")
 @Slf4j
+@Tag(name = "秒杀订单模块", description = "秒杀券下单接口")
 public class VoucherOrderController {
     @Resource
     private IVoucherOrderService voucherOrderService;
+
     @PostMapping("seckill/{id}")
-    public Result seckillVoucher(@PathVariable("id") Long voucherId) {
+    public Result seckillVoucher(
         return voucherOrderService.querySeckillVoucher(voucherId);
     }
+
     @PostMapping("seckill/saveOrder/{id}")
-    public Result saveSeckillVoucherOrder(@PathVariable("id") Long voucherId) {
+    public Result saveSeckillVoucherOrder(
 
         Result result = voucherOrderService.saveOrder(voucherId);
 

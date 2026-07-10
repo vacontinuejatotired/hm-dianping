@@ -1,0 +1,62 @@
+﻿<mxfile><diagram name="图3-2 双令牌鉴权流程" id="fig32">
+<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+<root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+
+<!-- 标题 -->
+<mxCell id="t" value="双令牌鉴权流程" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="180" y="10" width="240" height="30" as="geometry"/></mxCell>
+
+<!-- 步骤 1：登录请求 -->
+<mxCell id="s1" value="1. 用户登录请求" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;fontSize=11;" vertex="1" parent="1"><mxGeometry x="200" y="50" width="200" height="36" as="geometry"/></mxCell>
+
+<!-- 箭头 1→2 -->
+<mxCell id="a12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="s1" target="s2"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 步骤 2：AuthService 签发双令牌 -->
+<mxCell id="s2" value="2. AuthService.generateTokenPair()&#10;✦ 生成 JWT（userId + version）&#10;✦ 生成 UUID RefreshToken" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="160" y="110" width="280" height="54" as="geometry"/></mxCell>
+
+<!-- 箭头 2→3 -->
+<mxCell id="a23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="s2" target="s3"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 步骤 3：Lua 原子写入 Redis -->
+<mxCell id="s3" value="3. Lua 脚本原子写入 Redis&#10;✦ SET accessToken（30min）&#10;✦ SET refreshToken（7天）&#10;✦ SET version / currentVersion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="140" y="190" width="320" height="66" as="geometry"/></mxCell>
+
+<!-- 箭头 3→4 -->
+<mxCell id="a34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="s3" target="s4"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 步骤 4：返回 TokenPair + 设 Cookie -->
+<mxCell id="s4" value="4. 返回 TokenPair&#10;✦ Access Token → Authorization Header&#10;✦ Refresh Token → HttpOnly Cookie" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="160" y="280" width="280" height="46" as="geometry"/></mxCell>
+
+<!-- 分割线 -->
+<mxCell id="line" value="──────────────── 后续请求（已登录） ────────────────" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=11;fontColor=#999999;" vertex="1" parent="1"><mxGeometry x="100" y="340" width="400" height="20" as="geometry"/></mxCell>
+
+<!-- 步骤 5：请求携带 Access Token -->
+<mxCell id="s5" value="5. 请求携带 Authorization: Bearer {accessToken}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;fontSize=11;" vertex="1" parent="1"><mxGeometry x="200" y="370" width="200" height="36" as="geometry"/></mxCell>
+
+<!-- 箭头 5→6 -->
+<mxCell id="a56" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="s5" target="s6"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 步骤 6：RefreshTokenInterceptor -->
+<mxCell id="s6" value="6. RefreshTokenInterceptor.preHandle()&#10;✦ 解析 JWT → userId + version" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="160" y="430" width="280" height="46" as="geometry"/></mxCell>
+
+<!-- 箭头 6→7a / 6→7b 分支 -->
+<mxCell id="a67a" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="s6" target="s7a"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="a67b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.7;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;dashed=1;" edge="1" parent="1" source="s6" target="s7b"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 步骤 7a：Token 有效 → 放行 -->
+<mxCell id="s7a" value="✓ Token有效（Caffeine+Redis校验通过）&#10;→ 放行到 Controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="50" y="500" width="240" height="46" as="geometry"/></mxCell>
+
+<!-- 步骤 7b：Token 临期/过期 → 刷新 -->
+<mxCell id="s7b" value="⟳ Token临期或过期&#10;→ 分布式锁 + AuthService.refreshTokenPair()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE8E6;strokeColor=#EA4335;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="310" y="500" width="260" height="46" as="geometry"/></mxCell>
+
+<!-- 箭头 7b→8 -->
+<mxCell id="a7b8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="s7b" target="s8"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 步骤 8：刷新结果 -->
+<mxCell id="s8" value="8. 刷新结果&#10;✦ 临期：直接写新JWT（版本号不变）&#10;✦ 过期：Lua脚本，生成新版本号" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="310" y="570" width="260" height="54" as="geometry"/></mxCell>
+
+<!-- 图例 -->
+<mxCell id="legend" value="图例：正常流程 →  刷新分支 - - →" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=10;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="50" y="650" width="300" height="20" as="geometry"/></mxCell>
+</root>
+</mxGraphModel>
+</diagram></mxfile>

@@ -94,6 +94,7 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("【生成Token】userId={}, version={}, accessToken前20={}",
                 userId, version, accessToken.substring(0, Math.min(20, accessToken.length())));
+        updateLocalVersionCache(userId, version);
         return new TokenPair(accessToken, refreshToken, version);
     }
 

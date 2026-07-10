@@ -3,6 +3,9 @@ package com.hmdp.controller;
 import cn.hutool.core.util.StrUtil;
 import com.hmdp.dto.Result;
 import com.hmdp.service.FileService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +24,7 @@ import java.util.Set;
 @Slf4j
 @RestController
 @RequestMapping("upload")
+@Tag(name = "文件上传模块", description = "博客图片上传与删除接口")
 public class UploadController {
 
     @Resource
@@ -32,9 +36,10 @@ public class UploadController {
     private static final int MAX_IMAGE_HEIGHT = 4096;
 
     @PostMapping("blog")
+    @Operation(summary = "上传博客图片", description = "上传博客图片到文件服务，支持多种图片格式")
     public Result uploadImage(
-            @RequestParam("file") MultipartFile image,
-            @RequestParam("blogId") Long blogId) {
+            @Parameter(description = "图片文件") @RequestParam("file") MultipartFile image,
+            @Parameter(description = "博客ID") @RequestParam("blogId") Long blogId) {
         try {
             // === ① 文件名非空校验 ===
             String originalFilename = image.getOriginalFilename();
@@ -82,7 +87,9 @@ public class UploadController {
     }
 
     @DeleteMapping("/blog/delete")
-    public Result deleteBlogImg(@RequestParam("url") String fileUrl) {
+    @Operation(summary = "删除博客图片", description = "删除已上传的博客图片")
+    public Result deleteBlogImg(
+            @Parameter(description = "图片URL") @RequestParam("url") String fileUrl) {
         boolean deleted = fileService.delete(fileUrl);
         if (!deleted) {
             log.warn("文件删除失败或不存在: {}", fileUrl);

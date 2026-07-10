@@ -20,10 +20,14 @@ public class MvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(new LoginInterceptor())
                 .excludePathPatterns(
                         "/user/login","/shop/**","/voucher/**","/blog/hot",
-                        "/upload","/user/code","/shop-type/**","/test/restart/**",
-                        "/imgs/**").order(1);
+                        "/upload","/user/code","/user/password/reset","/shop-type/**","/test/restart/**",
+                        "/imgs/**","/error","/",
+                        "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**",
+                        "/webjars/**", "/doc.html").order(1);
         registry.addInterceptor(refreshTokenInterceptor).addPathPatterns("/**").excludePathPatterns(
-                "/blog/hot","/user/login","/user/code","/shop-type/list","/test/restart/**",
-                "/shop/**","/voucher/**","/imgs/**").order(0);
+                "/blog/hot","/user/login","/user/code","/user/password/reset","/shop-type/list",
+                "/test/restart/**", "/shop/**","/voucher/**","/imgs/**","/error","/",
+                "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**",
+                "/webjars/**", "/doc.html").order(0);
     }
 }

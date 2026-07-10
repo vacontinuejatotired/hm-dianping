@@ -4,6 +4,7 @@ package com.hmdp.controller;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Voucher;
 import com.hmdp.service.IVoucherService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
@@ -18,6 +19,7 @@ import jakarta.annotation.Resource;
  */
 @RestController
 @RequestMapping("/voucher")
+@Tag(name = "优惠券模块", description = "普通券、秒杀券查询与创建接口")
 public class VoucherController {
 
     @Resource
@@ -29,7 +31,7 @@ public class VoucherController {
      * @return 优惠券id
      */
     @PostMapping
-    public Result addVoucher(@RequestBody Voucher voucher) {
+    public Result addVoucher(
         voucherService.save(voucher);
         return Result.ok(voucher.getId());
     }
@@ -40,7 +42,7 @@ public class VoucherController {
      * @return 优惠券id
      */
     @PostMapping("seckill")
-    public Result addSeckillVoucher(@RequestBody Voucher voucher) {
+    public Result addSeckillVoucher(
         voucherService.addSeckillVoucher(voucher);
         return Result.ok(voucher.getId());
     }
@@ -51,7 +53,7 @@ public class VoucherController {
      * @return 优惠券列表
      */
     @GetMapping("/list/{shopId}")
-    public Result queryVoucherOfShop(@PathVariable("shopId") Long shopId) {
+    public Result queryVoucherOfShop(
        return voucherService.queryVoucherOfShop(shopId);
     }
 }

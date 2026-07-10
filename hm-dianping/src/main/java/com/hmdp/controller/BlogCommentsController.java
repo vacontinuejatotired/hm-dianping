@@ -1,6 +1,7 @@
 package com.hmdp.controller;
 
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import org.springframework.web.bind.annotation.RestController;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/blog-comments")
+@Tag(name = "博客评论模块", description = "博客评论相关接口（开发中）")
 public class BlogCommentsController {
 
 }
