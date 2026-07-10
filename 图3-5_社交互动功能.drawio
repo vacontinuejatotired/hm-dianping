@@ -1,0 +1,56 @@
+﻿<mxfile><diagram name="图3-5 社交互动功能" id="fig35">
+<mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+<root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+
+<mxCell id="t" value="社交互动功能结构" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="200" y="10" width="240" height="30" as="geometry"/></mxCell>
+
+<!-- ===== 一、探店笔记 ===== -->
+<mxCell id="sec1" value="一、探店笔记" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#EA4335;" vertex="1" parent="1"><mxGeometry x="40" y="50" width="260" height="24" as="geometry"/></mxCell>
+
+<mxCell id="b_save" value="发布笔记 POST /blog" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE8E6;strokeColor=#EA4335;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="70" y="80" width="200" height="36" as="geometry"/></mxCell>
+<mxCell id="b_hot" value="查询热门笔记 GET /blog/hot" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0E0;strokeColor=#EA4335;strokeWidth=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="70" y="130" width="200" height="36" as="geometry"/></mxCell>
+<mxCell id="b_detail" value="查询笔记详情 GET /blog/{id}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0E0;strokeColor=#EA4335;strokeWidth=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="70" y="180" width="200" height="36" as="geometry"/></mxCell>
+
+<!-- ===== 二、点赞功能 ===== -->
+<mxCell id="sec2" value="二、点赞功能" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#34A853;" vertex="1" parent="1"><mxGeometry x="380" y="50" width="260" height="24" as="geometry"/></mxCell>
+
+<mxCell id="l_req" value="点赞/取消 POST /blog/like/{id}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="400" y="80" width="220" height="36" as="geometry"/></mxCell>
+
+<mxCell id="l_judge" value="ZSet.score()&#10;查询是否已点赞" style="rhombus=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="420" y="135" width="180" height="46" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="l_req" target="l_judge"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="l_like" value="未点赞&#10;DB: liked + 1&#10;ZSet: add(userId, timestamp)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="400" y="200" width="200" height="46" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="l_judge" target="l_like"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="l_unlike" value="已点赞&#10;DB: liked - 1&#10;ZSet: remove(userId)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="400" y="200" width="200" height="46" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.7;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="l_judge" target="l_unlike"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="l_top" value="查询点赞排行榜&#10;ZSet.reverseRange() 取 TOP 5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="400" y="260" width="200" height="36" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="l_like" target="l_top"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- ===== 三、Feed 流 &amp; 关注 ===== -->
+<mxCell id="sec3" value="三、关注 Feed 流" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#4A86E8;" vertex="1" parent="1"><mxGeometry x="40" y="240" width="260" height="24" as="geometry"/></mxCell>
+
+<mxCell id="f_save" value="发布笔记后推送 Feed&#10;遍历关注者列表" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="70" y="275" width="200" height="40" as="geometry"/></mxCell>
+
+<mxCell id="f_zset" value="为每个关注者的 ZSet 添加&#10;key: feed:{followerId}&#10;value: blogId, score: timestamp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="70" y="330" width="200" height="46" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="f_save" target="f_zset"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="f_read" value="查询 Feed 流&#10;reverseRangeByScoreWithScores&#10;滚动分页（lastId, offset）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;fontSize=9;" vertex="1" parent="1"><mxGeometry x="70" y="395" width="200" height="46" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="f_zset" target="f_read"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 关注关系 -->
+<mxCell id="sec3b" value="四、关注关系" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#7B1FA2;" vertex="1" parent="1"><mxGeometry x="380" y="320" width="260" height="24" as="geometry"/></mxCell>
+
+<mxCell id="fol_oper" value="关注/取关&#10;POST /follow/{id}/{isFollow}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="400" y="355" width="220" height="40" as="geometry"/></mxCell>
+
+<mxCell id="fol_db" value="MySQL follow 表&#10;INSERT / DELETE 操作&#10;字段：follow_user_id&#10;      followed_user_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3F51B5;strokeWidth=2;fontSize=9;" vertex="1" parent="1"><mxGeometry x="400" y="410" width="220" height="50" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="fol_oper" target="fol_db"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="fol_check" value="查询是否关注&#10;count 判断" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9334E6;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="400" y="475" width="220" height="30" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="fol_db" target="fol_check"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+</root>
+</mxGraphModel>
+</diagram></mxfile>

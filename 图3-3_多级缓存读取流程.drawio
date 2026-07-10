@@ -1,0 +1,42 @@
+﻿<mxfile><diagram name="图3-3 多级缓存读取流程" id="fig33">
+<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+<root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+
+<mxCell id="t" value="多级缓存读取流程" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="180" y="10" width="240" height="30" as="geometry"/></mxCell>
+
+<!-- 请求入口 -->
+<mxCell id="req" value="查询商铺请求 queryById(id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;fontSize=11;" vertex="1" parent="1"><mxGeometry x="220" y="50" width="180" height="36" as="geometry"/></mxCell>
+
+<!-- 分流：Redis 缓存 -->
+<mxCell id="redis" value="Redis：查询 CACHE_SHOP_KEY + id&#10;∟ 缓存存在且逻辑未过期 → 直接返回&#10;∟ 缓存存在但逻辑过期 → 尝试获取互斥锁&#10;∟ 缓存不存在 → 查数据库" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="150" y="110" width="320" height="76" as="geometry"/></mxCell>
+<mxCell id="a_req_redis" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="req" target="redis"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 逻辑过期 3 个分支 -->
+<mxCell id="branch_hit" value="✓ 未过期&#10;返回 Redis 数据" style="rhombus=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="210" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="branch_expire" value="⟳ 已过期&#10;获取互斥锁" style="rhombus=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="250" y="210" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="branch_miss" value="✗ 缓存未命中&#10;查数据库" style="rhombus=1;whiteSpace=wrap;html=1;fillColor=#FCE8E6;strokeColor=#EA4335;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="440" y="210" width="120" height="50" as="geometry"/></mxCell>
+
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.15;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="redis" target="branch_hit"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="redis" target="branch_expire"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="redis" target="branch_miss"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 分支结果 -->
+<mxCell id="result_hit" value="返回商铺数据（JSON）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="280" width="120" height="36" as="geometry"/></mxCell>
+<mxCell id="result_lock_yes" value="获取到锁 → 异步线程重建缓存&#10;（返回旧数据，不阻塞）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="230" y="280" width="160" height="36" as="geometry"/></mxCell>
+<mxCell id="result_lock_no" value="未获取到锁 → 返回旧数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D6A300;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="230" y="320" width="160" height="30" as="geometry"/></mxCell>
+<mxCell id="result_db" value="DB 查到 → 写 Redis（逻辑过期）→ 返回&#10;DB 查不到 → 写空值（短TTL）→ 返回null" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE8E6;strokeColor=#EA4335;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="430" y="280" width="140" height="36" as="geometry"/></mxCell>
+
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="branch_hit" target="result_hit"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="branch_expire" target="result_lock_yes"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="branch_miss" target="result_db"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 重建缓存子流程 -->
+<mxCell id="rebuild" value="⟳ 异步线程池重建缓存&#10;dbFallBack.apply(id)&#10;→ setWithLogicalExpire()&#10;→ unlock()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="230" y="370" width="160" height="56" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1;dashed=1;" edge="1" parent="1" source="result_lock_yes" target="rebuild"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 更新链路提示 -->
+<mxCell id="update_note" value="写入/更新策略：先更新 DB → 再删除 Redis 缓存" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="450" width="350" height="30" as="geometry"/></mxCell>
+</root>
+</mxGraphModel>
+</diagram></mxfile>

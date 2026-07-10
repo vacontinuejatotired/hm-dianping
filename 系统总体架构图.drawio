@@ -1,0 +1,138 @@
+﻿<mxfile host="Electron" modified="2026-07-10T10:00:00.000Z" agent="Mozilla/5.0" version="20.3.0" etag="">
+  <diagram id="hm-dianping-arch" name="系统总体架构图">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- ===== 客户端层 ===== -->
+        <mxCell id="client-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;verticalAlign=top;fontStyle=0;fontSize=11;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="320" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="client-label" value="客户端" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#4A86E8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="320" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="client-vue" value="Vue 3 前端&#10;Access Token (Authorization Header)&#10;Refresh Token (HttpOnly Cookie)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4A86E8;strokeWidth=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="60" width="280" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- 箭头：客户端 → 拦截器 -->
+        <mxCell id="arrow-client-to-interceptor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;strokeColor=#666666;" edge="1" parent="1" source="client-box" target="interceptor-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== 接入/拦截器层 ===== -->
+        <mxCell id="interceptor-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=2;verticalAlign=top;fontStyle=0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="180" width="320" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="interceptor-label" value="接入层（拦截器）" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#B8860B;" vertex="1" parent="1">
+          <mxGeometry x="40" y="160" width="320" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="interceptor-refresh" value="RefreshTokenInterceptor&#10;令牌校验 → 临期/过期刷新 → 写回响应头" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D6A300;strokeWidth=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="280" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- 箭头：拦截器 → Controller -->
+        <mxCell id="arrow-interceptor-to-controller" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;strokeColor=#666666;" edge="1" parent="1" source="interceptor-box" target="controller-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== Controller 层 ===== -->
+        <mxCell id="controller-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;verticalAlign=top;fontStyle=0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="320" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="controller-label" value="Controller 层" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#1B7A2B;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="320" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="controller-items" value="ShopController | UserController | VoucherController&#10;BlogController | FollowController | ShopTypeController" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#34A853;strokeWidth=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="340" width="280" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- 箭头：Controller → Service -->
+        <mxCell id="arrow-controller-to-service" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;strokeColor=#666666;" edge="1" parent="1" source="controller-box" target="service-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== Service 层 ===== -->
+        <mxCell id="service-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE8E6;strokeColor=#EA4335;strokeWidth=2;verticalAlign=top;fontStyle=0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="460" width="480" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="service-label" value="Service 业务层" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#C4170A;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="480" height="24" as="geometry"/>
+        </mxCell>
+
+        <!-- Service 子模块 -->
+        <mxCell id="service-auth" value="AuthServiceImpl&#10;✦ JWT 签发/校验&#10;✦ Token 版本号管理&#10;✦ 临期/过期刷新&#10;✦ 验证码消费" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA4335;strokeWidth=1;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="60" y="480" width="140" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="service-shop" value="ShopServiceImpl&#10;✦ 多级缓存查询&#10;✦ GEO 附近搜索&#10;✦ 缓存穿透/击穿防护&#10;✦ 缓存预热" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA4335;strokeWidth=1;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="220" y="480" width="140" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="service-other" value="其他 Service&#10;✦ UserServiceImpl&#10;✦ VoucherServiceImpl&#10;✦ BlogServiceImpl&#10;✦ FollowServiceImpl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA4335;strokeWidth=1;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="380" y="480" width="120" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- 箭头：Service → 缓存层/数据层（分两路） -->
+        <mxCell id="arrow-service-to-cache" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;strokeColor=#666666;" edge="1" parent="1" source="service-box" target="cache-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow-service-to-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.8;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;strokeColor=#666666;" edge="1" parent="1" source="service-box" target="db-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== 缓存层 ===== -->
+        <mxCell id="cache-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=2;verticalAlign=top;fontStyle=0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="320" height="160" as="geometry"/>
+        </mxCell>
+        <mxCell id="cache-label" value="缓存层" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#7B1FA2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="320" height="24" as="geometry"/>
+        </mxCell>
+
+        <!-- L1 Caffeine -->
+        <mxCell id="cache-caffeine" value="L1  Caffeine 本地缓存&#10;✦ 用户信息缓存（异步刷新）&#10;✦ Token 版本缓存（快速拒绝）&#10;✦ 最大 10000 条，LRU 淘汰" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9334E6;strokeWidth=1;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="60" y="640" width="280" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- L2 Redis -->
+        <mxCell id="cache-redis" value="L2  Redis 分布式缓存&#10;✦ 商铺数据（逻辑过期）&#10;✦ 空值缓存（穿透防护）&#10;✦ GEO 位置索引 shop:geo:{typeId}&#10;✦ Token/验证码/分布式锁" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9334E6;strokeWidth=1;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="60" y="710" width="280" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Lua 标注 -->
+        <mxCell id="lua-note" value="⚡ Lua 脚本原子操作&#10;登录签发 · 过期刷新 · 验证码消费&#10;（合并多次网络往返为单次调用）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=1;fontSize=9;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="640" width="140" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- 虚线箭头：Service ↔ Lua -->
+        <mxCell id="arrow-service-to-lua" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;strokeColor=#FF8F00;dashed=1;" edge="1" parent="1" source="service-box" target="lua-note">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- 箭头：Redis → Lua（双向） -->
+        <mxCell id="arrow-redis-to-lua" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.9;exitY=0.5;exitDx=0;exitDy=0;entryX=0.1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=1;strokeColor=#FF8F00;dashed=1;" edge="1" parent="1" source="cache-redis" target="lua-note">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== 数据层 ===== -->
+        <mxCell id="db-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3F51B5;strokeWidth=2;verticalAlign=top;fontStyle=0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="620" width="200" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="db-label" value="数据层" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#283593;" vertex="1" parent="1">
+          <mxGeometry x="420" y="600" width="200" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="db-mysql" value="MySQL 8.0&#10;shop / user / user_info&#10;voucher / voucher_order&#10;blog / blog_comments / follow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3F51B5;strokeWidth=1;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="440" y="640" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- 图例 -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;strokeWidth=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="800" width="580" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-text" value="图例：正常请求流向 →  Lua 原子操作 - - →  （各层颜色仅用于区分层级）" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="800" width="580" height="50" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
