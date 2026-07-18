@@ -20,6 +20,7 @@ import org.apache.tomcat.util.buf.StringUtils;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
 import org.springframework.data.geo.GeoResults;
+import org.springframework.data.geo.Metric;
 import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.domain.geo.GeoReference;
@@ -32,6 +33,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * 商铺服务实现 — 多级缓存（Caffeine+Redis+DB）、缓存穿透/击穿/雪崩处理、按距离查询
@@ -172,10 +174,11 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     }
 
     @Override
-    public Result queryShopByType(Integer typeId, Integer current, Double x, Double y) {
+    public Result queryShopByType(Integer typeId, Integer current, Double x, Double y, String sortBy) {
         if (x==null || y==null){
-                    Page<Shop> page = query()
+            Page<Shop> page = query()
                 .eq("type_id", typeId)
+                .orderByDesc(StrUtil.isNotBlank(sortBy) && isSortable(sortBy), sortColumn(sortBy))
                 .page(new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE));
             return Result.ok(page);
         }
@@ -229,5 +232,43 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         redisData.setData(shop);
         redisData.setExpireTime(LocalDateTime.now().plusSeconds(expireSeconds));
         stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY+id,JSONUtil.toJsonStr(redisData));
+    }
+
+    @Override
+    public List<Shop> getHotShop(Double x, Double y,Integer typeId) {
+        if (x==null || y==null){
+            return Collections.emptyList();
+        }
+        String key = "shop:geo:"+typeId;
+        //查询5km内的商家
+        GeoResults<RedisGeoCommands.GeoLocation<String>> results = stringRedisTemplate.boundGeoOps(key).search(GeoReference.fromCoordinate(x, y),
+                new Distance(5, RedisGeoCommands.DistanceUnit.KILOMETERS),
+                RedisGeoCommands.GeoSearchCommandArgs.newGeoSearchArgs().includeDistance().limit(10));
+        if (results==null){
+            return Collections.emptyList();
+        }
+        List<Shop> hotShopList = new ArrayList<>();
+        hotShopList = results.getContent().stream().map(item->{
+            return getById(Long.parseLong(item.getContent().getName()));
+        }).collect(Collectors.toList());
+        return hotShopList;
+    }
+
+    /** 可排序字段白名单（camelCase → 实际列名），防止 SQL 注入 */
+    private static final Map<String, String> SORTABLE_FIELDS = Map.of(
+            "score", "score",
+            "sold", "sold",
+            "comments", "comments",
+            "avgPrice", "avg_price"
+    );
+
+    private static boolean isSortable(String field) {
+        return field != null && SORTABLE_FIELDS.containsKey(field);
+    }
+
+    /** 返回实际数据库列名 */
+    private static String sortColumn(String field) {
+        if (field == null) return null;
+        return SORTABLE_FIELDS.getOrDefault(field, field);
     }
 }

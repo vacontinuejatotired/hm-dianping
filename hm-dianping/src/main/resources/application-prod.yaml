@@ -58,6 +58,7 @@ logging:
   level:
     com.hmdp: debug
     org.springframework.data.redis: WARN
+  
 
 debug: false
 

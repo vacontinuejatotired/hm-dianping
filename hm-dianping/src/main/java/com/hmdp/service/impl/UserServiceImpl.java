@@ -74,13 +74,38 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     /**
-     * 密码登录
+     * 密码登录（含自动注册：新手机号+密码首次登录即创建账号）
      */
     private TokenPair loginByPassword(String phone, String password) {
         // 查用户
         User user = query().eq("phone", phone).one();
-        if (user == null || user.getPassword() == null) {
-            throw new IllegalArgumentException("账号或密码错误");
+
+        // 新用户自动注册：手机号不存在则创建账号
+        if (user == null) {
+            String nickName = SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomNumbers(6);
+            user = new User().setPhone(phone)
+                    .setPassword(PasswordEncoder.encode(password))
+                    .setCreateTime(LocalDateTime.now())
+                    .setUpdateTime(LocalDateTime.now());
+            save(user);
+            // 同步创建 UserInfo 记录
+            UserInfo newInfo = new UserInfo();
+            newInfo.setUserId(user.getId());
+            newInfo.setNickName(nickName);
+            userInfoService.save(newInfo);
+            log.info("【密码登录-自动注册】phone={}, userId={}", phone, user.getId());
+
+            // 直接生成 Token 返回
+            TokenPair tokenPair = authService.generateTokenPair(user.getId());
+            UserDTO userDTO = new UserDTO();
+            BeanUtil.copyProperties(user, userDTO);
+            log.info("【密码登录成功（新用户）】userId={}", user.getId());
+            return tokenPair;
+        }
+
+        // 已有用户：校验密码
+        if (user.getPassword() == null) {
+            throw new IllegalArgumentException("该手机号未设置密码，请使用验证码登录");
         }
 
         // 账户锁定检查
@@ -216,9 +241,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     public Result updateProfile(ProfileUpdateDTO dto) {
         Long userId = UserHolder.getUserId();
 
-        // 更新 UserInfo 表（nickName, icon, city, introduce）
-        UserInfo userInfo = new UserInfo();
-        userInfo.setUserId(userId);
+        // 从 DB 查出现有记录，避免 new UserInfo() 时默认值 "" 覆盖原有字段
+        UserInfo userInfo = userInfoService.getById(userId);
+        if (userInfo == null) {
+            userInfo = new UserInfo();
+            userInfo.setUserId(userId);
+        }
         boolean needUpdateInfo = false;
         if (dto.getNickName() != null) {
             String nickName = dto.getNickName().strip();
@@ -230,12 +258,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         if (dto.getIcon() != null) {
             // 新旧 icon 不同时删除旧文件
-            UserInfo oldInfo = userInfoService.getById(userId);
-            if (oldInfo != null
-                    && oldInfo.getIcon() != null && !oldInfo.getIcon().isEmpty()
-                    && !oldInfo.getIcon().equals(dto.getIcon())) {
-                fileService.delete(oldInfo.getIcon());
-                log.info("已删除旧头像: userId={}, oldIcon={}", userId, oldInfo.getIcon());
+            String oldIcon = userInfo.getIcon();
+            if (oldIcon != null && !oldIcon.isEmpty()
+                    && !oldIcon.equals(dto.getIcon())) {
+                fileService.delete(oldIcon);
+                log.info("已删除旧头像: userId={}, oldIcon={}", userId, oldIcon);
             }
             userInfo.setIcon(dto.getIcon());
             needUpdateInfo = true;
@@ -250,19 +277,41 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         if (needUpdateInfo) {
             userInfoService.updateById(userInfo);
-            // 更新 Caffeine 本地缓存，确保 GET /user/me 立即返回新值
+            // 从 DB 查完整数据后刷新 Caffeine 缓存
             String userInfoKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
-            UserinfoCache cache = userinfoCaffeine.getIfPresent(userInfoKey);
-            if (cache != null) {
-                if (dto.getNickName() != null) cache.setNickName(dto.getNickName().strip());
-                if (dto.getIcon() != null) cache.setIcon(dto.getIcon());
-                userinfoCaffeine.put(userInfoKey, cache);
+            UserInfo fresh = userInfoService.getById(userId);
+            if (fresh != null) {
+                UserinfoCache newCache = new UserinfoCache(userId, fresh.getNickName(), fresh.getIcon());
+                userinfoCaffeine.put(userInfoKey, newCache);
                 log.debug("已更新用户缓存 userId={}", userId);
             }
         }
 
         log.info("用户 {} 更新个人资料: nickName={}, icon={}, city={}, introduce={}",
                 userId, dto.getNickName(), dto.getIcon(), dto.getCity(), dto.getIntroduce());
+        return Result.ok();
+    }
+
+    @Override
+    public Result resetPassword(String phone, String code, String newPassword) {
+        // 校验验证码
+        if (!authService.consumeVerifyCode(phone, code)) {
+            return Result.fail("验证码错误或已过期");
+        }
+        // 校验密码强度
+        if (RegexUtils.isPasswordInvalid(newPassword)) {
+            return Result.fail("密码需至少8位，包含大写、小写、数字");
+        }
+        // 查用户
+        User user = query().eq("phone", phone).one();
+        if (user == null) {
+            return Result.fail("该手机号未注册");
+        }
+        // 更新密码
+        user.setPassword(PasswordEncoder.encode(newPassword));
+        user.setUpdateTime(LocalDateTime.now());
+        updateById(user);
+        log.info("密码重置成功 phone={}, userId={}", phone, user.getId());
         return Result.ok();
     }
 

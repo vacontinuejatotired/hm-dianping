@@ -1,0 +1,41 @@
+﻿<mxfile><diagram name="图3-4 附近商户搜索" id="fig34">
+<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+<root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+
+<mxCell id="t" value="附近商户搜索流程" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="180" y="10" width="240" height="30" as="geometry"/></mxCell>
+
+<!-- 请求入口 -->
+<mxCell id="req" value="请求 /shop/of/type?typeId=1&amp;x=113.5&amp;y=22.3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4A86E8;strokeWidth=2;fontSize=11;" vertex="1" parent="1"><mxGeometry x="180" y="50" width="240" height="36" as="geometry"/></mxCell>
+
+<!-- 判断坐标 -->
+<mxCell id="judge" value="判断 x,y 是否为空" style="rhombus=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6A300;strokeWidth=2;fontSize=11;" vertex="1" parent="1"><mxGeometry x="220" y="110" width="160" height="50" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="req" target="judge"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 无坐标分支 -->
+<mxCell id="no_xy" value="无坐标&#10;MySQL 分页查询" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="220" y="180" width="160" height="40" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="judge" target="no_xy"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 有坐标分支 -->
+<mxCell id="has_xy" value="有坐标&#10;Redis GEOSEARCH 按距离搜索" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FD;strokeColor=#9334E6;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="420" y="180" width="180" height="40" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="judge" target="has_xy"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- Redis 步骤 -->
+<mxCell id="redis_step1" value="1. opsForGeo().search()&#10;Key: shop:geo:{typeId}&#10;半径: 5km" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9334E6;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="430" y="240" width="160" height="46" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="has_xy" target="redis_step1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="redis_step2" value="2. 返回 GeoResults&#10;shopId + distance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9334E6;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="430" y="300" width="160" height="36" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="redis_step1" target="redis_step2"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- MySQL 回查 -->
+<mxCell id="mysql" value="3. MySQL 批量回查详情&#10;ORDER BY FIELD 排序&#10;绑定 distance 到 shop" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3F51B5;strokeWidth=2;fontSize=9;" vertex="1" parent="1"><mxGeometry x="430" y="360" width="160" height="50" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="redis_step2" target="mysql"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<mxCell id="result" value="4. 返回商户列表" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;fontSize=10;" vertex="1" parent="1"><mxGeometry x="450" y="430" width="120" height="36" as="geometry"/></mxCell>
+<mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" edge="1" parent="1" source="mysql" target="result"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+<!-- 排序说明 -->
+<mxCell id="sort_note" value="排序：按距离（默认）/ score / sold / comments&#10;白名单防注入" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="190" y="240" width="200" height="36" as="geometry"/></mxCell>
+</root>
+</mxGraphModel>
+</diagram></mxfile>

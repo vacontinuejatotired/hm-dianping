@@ -171,13 +171,13 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             UserHolder.saveUserId(userId);
             String userInfoKey = CaffeineConstants.USERINFO_CACHE_KEY + userId;
             UserinfoCache cache = userinfoCaffeine.get(userInfoKey);
-            // Caffeine load 返回空 nickName/icon 时不阻塞等待异步加载
-            // 兜底：从 DB 同步查一次并回填缓存，确保首次请求拿到正确数据
-            if (cache.getNickName() == null || cache.getNickName().isEmpty()) {
+            // Caffeine load 返回空值时不阻塞等待异步加载
+            // 兜底：nickName 或 icon 为空时从 DB 同步回填
+            if (cache.getNickName() == null || cache.getNickName().isEmpty()
+                    || cache.getIcon() == null || cache.getIcon().isEmpty()) {
                 UserInfo userInfo = userInfoService.getById(userId);
                 if (userInfo != null) {
-                    cache.setNickName(userInfo.getNickName());
-                    cache.setIcon(userInfo.getIcon());
+                    cache = new UserinfoCache(userId, userInfo.getNickName(), userInfo.getIcon());
                     userinfoCaffeine.put(userInfoKey, cache);
                 }
             }

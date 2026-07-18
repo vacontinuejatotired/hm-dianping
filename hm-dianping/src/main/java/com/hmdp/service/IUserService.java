@@ -32,6 +32,9 @@ public interface IUserService extends IService<User> {
     /** 编辑个人资料 — nickName/icon/city/introduce 均为可选 */
     Result updateProfile(ProfileUpdateDTO dto);
 
+    /** 重置密码 — 验证码 + 新密码，免旧密码 */
+    Result resetPassword(String phone, String code, String newPassword);
+
     Result sign();
 
     Result getSignCount();

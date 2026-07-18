@@ -17,6 +17,9 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
 import com.hmdp.utils.cache.CacheClient;
 import com.hmdp.utils.redis.RedisConstants;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @RestController
 @RequestMapping("/user")
+@Tag(name = "用户模块", description = "用户登录、注册、信息查询、签到等接口")
 public class UserController {
 
     @Resource
@@ -60,7 +64,9 @@ public class UserController {
      * 发送手机验证码
      */
     @PostMapping("code")
-    public Result sendCode(@RequestParam("phone") String phone) {
+    @Operation(summary = "发送手机验证码", description = "向指定手机号发送登录验证码")
+    public Result sendCode(
+            @Parameter(description = "手机号") @RequestParam("phone") String phone) {
         return userService.sendCode(phone);
     }
 
@@ -70,7 +76,10 @@ public class UserController {
      * @param response 用于写回 Token 响应头
      */
     @PostMapping("/login")
-    public Result login(@RequestBody LoginFormDTO loginForm, HttpServletResponse response){
+    @Operation(summary = "用户登录", description = "支持验证码登录或密码登录，返回Token对")
+    public Result login(
+            @Parameter(description = "登录表单") @RequestBody LoginFormDTO loginForm,
+            HttpServletResponse response) {
         TokenPair tokenPair = userService.login(loginForm);
         response.setHeader("authorization", "Bearer " + tokenPair.getAccessToken());
         setRefreshTokenCookie(response, tokenPair.getRefreshToken());
@@ -81,7 +90,8 @@ public class UserController {
      * 登出功能 — 删除 Redis 中该用户的所有 Token/Version 记录，并清除客户端 Cookie
      */
     @PostMapping("/logout")
-    public Result logout(HttpServletResponse response){
+    @Operation(summary = "用户登出", description = "清除用户登出，清除Token记录")
+    public Result logout(HttpServletResponse response) {
         Long userId = UserHolder.getUserId();
         if (userId == null) {
             return Result.fail("未登录");
@@ -101,19 +111,16 @@ public class UserController {
     }
 
     @GetMapping("/me")
+    @Operation(summary = "获取当前用户信息", description = "获取当前登录用户的基本信息")
     public Result me(){
         log.info("{}",UserHolder.getUserDTO());
         return Result.ok(UserHolder.getUserDTO());
     }
 
     @GetMapping("/{id}")
-    public Result queryUserById(@PathVariable("id") Long userId){
-        // 权限校验：只能查自己的信息
-        Long currentUserId = UserHolder.getUserId();
-        if (!currentUserId.equals(userId)) {
-            log.warn("越权访问: currentUserId={}, targetUserId={}", currentUserId, userId);
-            return Result.fail("无权访问该用户信息");
-        }
+    @Operation(summary = "查询用户信息", description = "根据用户ID查询用户信息")
+    public Result queryUserById(
+            @Parameter(description = "用户ID") @PathVariable("id") Long userId) {
         // 缓存查询（缓存穿透防护）
         User user = cacheClient.queryById(userId, User.class, "cache:user:",
                 id -> userService.getById(id), 30L, TimeUnit.MINUTES);
@@ -130,7 +137,9 @@ public class UserController {
         return Result.ok(userDTO);
     }
     @GetMapping("/info/{id}")
-    public Result info(@PathVariable("id") Long userId){
+    @Operation(summary = "查询用户详情", description = "查询用户详细信息（仅自己可查）")
+    public Result info(
+            @Parameter(description = "用户ID") @PathVariable("id") Long userId) {
         // 权限校验：只能查自己的详细信息
         Long currentUserId = UserHolder.getUserId();
         if (!currentUserId.equals(userId)) {
@@ -149,10 +158,12 @@ public class UserController {
         return Result.ok(info);
     }
     @PostMapping("/sign")
+    @Operation(summary = "用户签到", description = "今日签到功能")
     public Result sign(){
         return userService.sign();
     }
     @GetMapping("/sign/count")
+    @Operation(summary = "签到统计", description = "查询连续签到天数统计")
     public Result signCount(){
         return userService.getSignCount();
     }
@@ -163,7 +174,10 @@ public class UserController {
      * @return 新 TokenPair（旧 Token 自动失效）
      */
     @PutMapping("/password")
-    public Result changePassword(@RequestBody PasswordChangeDTO dto, HttpServletResponse response){
+    @Operation(summary = "修改密码", description = "修改当前用户密码")
+    public Result changePassword(
+            @Parameter(description = "密码修改表单") @RequestBody PasswordChangeDTO dto,
+            HttpServletResponse response){
         TokenPair tokenPair = userService.changePassword(dto);
         response.setHeader("authorization", "Bearer " + tokenPair.getAccessToken());
         setRefreshTokenCookie(response, tokenPair.getRefreshToken());
@@ -179,11 +193,12 @@ public class UserController {
      * @param introduce 个人简介（可选）
      */
     @PutMapping("/profile")
+    @Operation(summary = "编辑个人资料", description = "修改用户昵称、头像、城市、简介等信息")
     public Result updateProfile(
-            @RequestParam(required = false) MultipartFile iconFile,
-            @RequestParam(required = false) String nickName,
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) String introduce) throws IOException {
+            @Parameter(description = "头像文件") @RequestParam(required = false) MultipartFile iconFile,
+            @Parameter(description = "昵称") @RequestParam(required = false) String nickName,
+            @Parameter(description = "城市") @RequestParam(required = false) String city,
+            @Parameter(description = "个人简介") @RequestParam(required = false) String introduce) throws IOException {
 
         String iconUrl = null;
         if (iconFile != null && !iconFile.isEmpty()) {
@@ -196,6 +211,18 @@ public class UserController {
         dto.setIntroduce(blankToNull(introduce));
         dto.setIcon(iconUrl);
         return userService.updateProfile(dto);
+    }
+
+    /**
+     * 重置密码 — 验证码 + 新密码，免旧密码
+     */
+    @PutMapping("/password/reset")
+    @Operation(summary = "重置密码", description = "通过验证码重置密码")
+    public Result resetPassword(
+            @Parameter(description = "手机号") @RequestParam("phone") String phone,
+            @Parameter(description = "验证码") @RequestParam("code") String code,
+            @Parameter(description = "新密码") @RequestParam("newPassword") String newPassword) {
+        return userService.resetPassword(phone, code, newPassword);
     }
 
     /** 空字符串转 null，避免 Service 层误将空串当作有效值 */

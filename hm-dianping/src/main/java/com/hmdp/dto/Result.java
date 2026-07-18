@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * 统一响应体 — 所有API返回此对象
@@ -14,9 +15,13 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Result {
+    @Schema(description = "是否成功")
     private Boolean success;
+    @Schema(description = "错误信息")
     private String errorMsg;
+    @Schema(description = "响应数据")
     private Object data;
+    @Schema(description = "总条数（分页时使用）")
     private Long total;
 
     public static Result ok(){
