@@ -33,11 +33,15 @@ public class FollowController {
         return followService.follow(id, isfollow);
     }
 
-    @GetMapping("/or/not/{id}")
+    @GetMapping("/or/not/{targetId}")
     @Operation(summary = "查询是否已关注", description = "检查当前用户是否关注了指定用户")
-    public Result queryNotFollow(
-            @Parameter(description = "目标用户ID") @PathVariable("id") Long id) {
-        return followService.queryNotFollow(id);
+    public Result queryFollowStatus(
+            @Parameter(description = "目标用户ID") @PathVariable("targetId") Long targetId) {
+                if (targetId == null) {
+                    return Result.fail("目标用户ID不能为空");
+                }
+
+        return followService.queryFollowStatus(targetId);
     }
 
     @GetMapping("/common/{id}")
