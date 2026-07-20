@@ -56,7 +56,10 @@ mybatis-plus:
 
 logging:
   level:
-    com.hmdp: debug
+    com.hmdp: WARN                            # 其他 hmdp 包安静
+    com.hmdp.service.impl: DEBUG              # 想看 AuthServiceImpl 日志
+    com.hmdp.interceptor: DEBUG               # 想看 Token 拦截器日志
+    com.hmdp.controller: WARN                 # Controller 按需调
     org.springframework.data.redis: WARN
   
 
