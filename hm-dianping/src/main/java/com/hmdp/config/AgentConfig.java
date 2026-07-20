@@ -1,47 +1,68 @@
-// package com.hmdp.config;
+package com.hmdp.config;
 
-// import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-// import jakarta.annotation.Resource;
-// import org.springframework.ai.chat.client.ChatClient;
-// import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-// import org.springframework.ai.chat.memory.ChatMemory;
-// import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-// import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
-// import org.springframework.context.annotation.Bean;
-// import org.springframework.context.annotation.Configuration;
-// import org.springframework.jdbc.core.JdbcTemplate;
+import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
+import com.hmdp.tool.ToolBeanCollector;
 
-// @Configuration
-// public class AgentConfig {
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 
-//     @Resource
-//     private JdbcTemplate jdbcTemplate;
-//     /**
-//      * 对话记忆（用于多轮对话）
-//      */
-//     @Bean
-//     public ChatMemory chatMemory() {
-//         // 生产环境建议使用 RedisChatMemory
-//         JdbcChatMemoryRepository repository = JdbcChatMemoryRepository.builder().jdbcTemplate(jdbcTemplate).build();
-//         return MessageWindowChatMemory.builder().maxMessages(10).chatMemoryRepository(repository).build();
-//     }
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 
-//     /**
-//      * ChatClient（AI 客户端）
-//      */
-//     @Bean
-//     public ChatClient chatClient(DashScopeChatModel chatModel, ChatMemory chatMemory) {
-//         return ChatClient.builder(chatModel)
-//                 // 系统提示词
-//                 .defaultSystem("""
-//                         你是一个专业的电商智能客服，名叫"小黑助手"。
-//                         你的职责是帮助用户解答关于商品、订单、优惠券、售后等问题。
-//                         回答要亲切、耐心、专业。
-//                         如果涉及具体订单查询，请引导用户提供订单号。
-//                         如果不知道答案，不要编造，可以说"这个问题我需要核实一下，请稍后再问"。
-//                         """)
-//                 // 对话记忆
-//                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-//                 .build();
-//     }
-// }
+@Configuration
+@Slf4j
+public class AgentConfig {
+
+    @Resource
+    private JdbcTemplate jdbcTemplate;
+
+    /**
+     * 对话记忆（用于多轮对话）
+     */
+    @Bean
+    public ChatMemory chatMemory() {
+        // 生产环境建议使用 RedisChatMemory
+        JdbcChatMemoryRepository repository = JdbcChatMemoryRepository.builder().jdbcTemplate(jdbcTemplate).build();
+        return MessageWindowChatMemory.builder().maxMessages(10).chatMemoryRepository(repository).build();
+    }
+
+    /**
+     * ChatClient（AI 客户端）
+     * <p>
+     * 工具自动注入：{@link ToolBeanCollector} 在启动时扫描所有含 {@code @Tool} 方法的 Bean，
+     * 无需手动 {@code @Resource} 每个工具类。
+     */
+    @Bean("aliibabaChatClient")
+    public ChatClient chatClient(DashScopeChatModel chatModel, ChatMemory chatMemory,
+                                 ToolBeanCollector toolBeanCollector) {
+        Object[] toolBeans = toolBeanCollector.getToolBeans();
+
+        ChatClient chatClient = ChatClient.builder(chatModel)
+                        // 系统提示词
+                        .defaultSystem("""
+                                你是电商客服，但当用户问天气时，你必须调用 queryWeather 工具，不要自己回答。
+                                """)
+                        // 对话记忆
+                        .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                        // 自动注入所有 @Tool 注解的 Bean
+                        .defaultTools(toolBeans)
+                        .build();
+        log.info("ChatClient 构建完成，自动注册工具 {} 个", toolBeans.length);
+
+        return chatClient;
+    }
+
+    // @Bean
+    // public ChatClient chatClient(OpenAiChatModel chatModel, ChatMeory chatMemory) {
+    //     return ChatClient.builder(chatModel)
+    //             .defaultSystem("你是一个专业的电商智能客服，名叫"小黑助手"。")
+    //             .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+    //             .build();
+    // }
+}

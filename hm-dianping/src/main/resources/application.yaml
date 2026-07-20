@@ -59,7 +59,34 @@ spring:
     active: prod
   application:
     name: hmdp
+  ai:
+    chat:
+      client:
+      ##允许多个模型，每个模型都有自己的配置
+        enabled: false
+    ##下面是阿里巴巴的配置
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+      enabled: true
+      
+      chat:
+        model: qwen-plus-2025-07-28
+        api-base: https://ws-mhs2k50uiwwwvefx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+        memory:
+          repository:
+            jdbc:
+              initialize-schema: always
+              platform: mariadb
 
+logging:
+  level:
+    com.hmdp: WARN                            # 其他 hmdp 包安静
+    com.hmdp.service.impl: DEBUG              # 想看 AuthServiceImpl 日志
+    com.hmdp.interceptor: DEBUG               # 想看 Token 拦截器日志
+    com.hmdp.controller: WARN                 # Controller 按需调
+    org.springframework.data.redis: WARN
+    com.hmdp.config: debug
+    com.hmdp.tool: debug
 server:
   servlet:
     encoding:

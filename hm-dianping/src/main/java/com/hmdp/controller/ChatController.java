@@ -64,7 +64,7 @@ public class ChatController {
             emitter.onError(ex -> log.error("SSE 流异常, content={}", content, ex));
 
             // 委托 AiService 异步推送
-            aiService.chatStream(content, emitter);
+            aiService.chatWithToolcall(content, emitter);
             return emitter;
         }
         String result = "";
