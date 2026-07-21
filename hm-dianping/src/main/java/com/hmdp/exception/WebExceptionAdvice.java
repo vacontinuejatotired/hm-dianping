@@ -1,4 +1,4 @@
-package com.hmdp.config;
+package com.hmdp.exception;
 
 import com.hmdp.dto.Result;
 import lombok.extern.slf4j.Slf4j;

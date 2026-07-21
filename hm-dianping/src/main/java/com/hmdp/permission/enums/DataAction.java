@@ -1,4 +1,4 @@
-package com.hmdp.enums;
+package com.hmdp.permission.enums;
 
 /**
  * 数据操作动作枚举
@@ -75,7 +75,7 @@ public enum DataAction {
      * 判断是否为高风险操作（需要二次确认）
      */
     public boolean isHighRisk() {
-        return this.riskLevel >= 2;
+        return this.riskLevel >= 4;
     }
 
     /**

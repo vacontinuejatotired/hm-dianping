@@ -1,4 +1,4 @@
-package com.hmdp.config;
+package com.hmdp.agent.config;
 
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import io.netty.channel.ChannelOption;

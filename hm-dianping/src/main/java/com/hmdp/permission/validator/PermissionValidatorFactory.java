@@ -1,4 +1,4 @@
-package com.hmdp.tool.permission;
+package com.hmdp.permission.validator;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;

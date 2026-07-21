@@ -1,4 +1,4 @@
-package com.hmdp.tool.impl;
+package com.hmdp.agent.tool.impl;
 
 import java.util.List;
 
@@ -9,6 +9,8 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hmdp.annotation.TargetTool;
 import com.hmdp.entity.Blog;
+import com.hmdp.permission.annotation.RequiredDataPermission;
+import com.hmdp.permission.enums.DataAction;
 import com.hmdp.service.IBlogService;
 
 import jakarta.annotation.Resource;
@@ -23,6 +25,7 @@ public class BlogTool {
 
     //需要做安全校验，确保用户是当前登录用户
     @Tool(description = "查询本用户点赞10篇已发布博客")
+    @RequiredDataPermission(resource  = "blog", action = DataAction.READ)
     public List<Blog> queryPublishedBlogs(ToolContext toolContext) {
         Long userId = (Long) toolContext.getContext().get("userId");
         log.info("queryPublishedBlogs userId: {}", userId);
@@ -31,7 +34,8 @@ public class BlogTool {
     }
 
     @Tool(description = "为该用户发布一篇测试博客")
-    public Blog publishTestBlog( ToolContext toolContext) {
+    @RequiredDataPermission(resource  = "blog", action = DataAction.CREATE)
+       public Blog publishTestBlog( ToolContext toolContext) {
         Long userId = (Long) toolContext.getContext().get("userId");
         log.info("publishTestBlog userId: {}", userId);
         Blog blog = new Blog();
@@ -47,6 +51,7 @@ public class BlogTool {
     }
 
     @Tool(description = "模糊查询博客标题")
+    @RequiredDataPermission(resource  = "blog", action = DataAction.READ)
     public List<Blog> queryBlogsByTitle(@ToolParam(description = "要查询的模糊博客标题") String title) {
         return blogService.query().like("title", title).list();
     }

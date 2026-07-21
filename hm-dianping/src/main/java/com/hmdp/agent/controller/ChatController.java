@@ -1,7 +1,7 @@
-package com.hmdp.controller;
+package com.hmdp.agent.controller;
 
 import com.hmdp.dto.Result;
-import com.hmdp.service.AiService;
+import com.hmdp.agent.service.AiService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

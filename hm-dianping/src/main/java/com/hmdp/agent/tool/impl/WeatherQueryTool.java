@@ -1,4 +1,4 @@
-package com.hmdp.tool.impl;
+package com.hmdp.agent.tool.impl;
 
 import com.hmdp.annotation.TargetTool;
 
