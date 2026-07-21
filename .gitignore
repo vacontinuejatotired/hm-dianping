@@ -4,3 +4,7 @@
 .idea/jarRepositories.xml
 .idea/dataSources.xml
 .reasonix/
+
+# IDE directories
+.vscode/
+.trae/
