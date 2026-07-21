@@ -1,7 +1,7 @@
-package com.hmdp.config;
+package com.hmdp.agent.config;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.hmdp.tool.ToolBeanCollector;
+import com.hmdp.agent.tool.ToolBeanCollector;
 
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +11,7 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,7 +42,7 @@ public class AgentConfig {
     @Bean("aliibabaChatClient")
     public ChatClient chatClient(DashScopeChatModel chatModel, ChatMemory chatMemory,
                                  ToolBeanCollector toolBeanCollector) {
-        Object[] toolBeans = toolBeanCollector.getToolBeans();
+        ToolCallback[] toolCallbacks = toolBeanCollector.getToolCallbacks();
 
         ChatClient chatClient = ChatClient.builder(chatModel)
                         // 系统提示词
@@ -50,10 +51,10 @@ public class AgentConfig {
                                 """)
                         // 对话记忆
                         .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                        // 自动注入所有 @Tool 注解的 Bean
-                        .defaultTools(toolBeans)
+                        // 自动注入所有已包装守卫的 ToolCallback
+                        .defaultTools((Object[]) toolCallbacks)
                         .build();
-        log.info("ChatClient 构建完成，自动注册工具 {} 个", toolBeans.length);
+        log.info("ChatClient 构建完成，注册守卫工具 {} 个", toolCallbacks.length);
 
         return chatClient;
     }

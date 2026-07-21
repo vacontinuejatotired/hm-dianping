@@ -1,6 +1,6 @@
-package com.hmdp.service.impl;
+package com.hmdp.agent.service.impl;
 
-import com.hmdp.service.AiService;
+import com.hmdp.agent.service.AiService;
 import com.hmdp.utils.UserHolder;
 
 import jakarta.annotation.Resource;
@@ -31,7 +31,6 @@ public class AiServiceImpl implements AiService {
 
     private String END = "[DONE]";
 
-    private String ASK_PERMISSION = "[请确认是否授权调用工具]";
 
     @Override
     public String chatReturnStringResult(String content) {
@@ -112,12 +111,7 @@ public class AiServiceImpl implements AiService {
                 //   1. 发消息 → 模型返回 tool call
                 //   2. 自动执行注册的 @Tool 方法
                 //   3. 工具结果送回模型 → 生成最终回复
-                boolean checkPermission = checkPermission(userId, content);
-                if (!checkPermission) {
-                    emitter.send(SseEmitter.event().data(ASK_PERMISSION));
-                    emitter.complete();
-                    return;
-                }
+                // 守卫逻辑已在 GuardedToolCallback 层处理，无需在此处前置检查
                 String result = prompt.call().content();
                 log.info("工具调用完成, result={}", result);
 
@@ -149,16 +143,4 @@ public class AiServiceImpl implements AiService {
                 .replace("\t", "\\t");
     }
     
-    //任务执行前检查是否符合安全策略
-    //需要用户审批确认
-    private boolean checkPermission(Long userId, String toolName) {
-        
-        //1.明确的拒绝列表
-
-        //2.匹配用户自定义拒绝规则
-
-        //3.根据结果决定是直接调用还是让用户审批之后再调用
-        return true;
-    }
-
 }

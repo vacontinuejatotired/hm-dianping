@@ -86,7 +86,9 @@ logging:
     com.hmdp.controller: WARN                 # Controller 按需调
     org.springframework.data.redis: WARN
     com.hmdp.config: debug
-    com.hmdp.tool: debug
+    com.hmdp.permission: debug
+    com.hmdp.agent: DEBUG
+    com.hmdp.agent.tool: DEBUG
 server:
   servlet:
     encoding:
