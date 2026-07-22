@@ -38,7 +38,7 @@ public class ToolPermissionAspect {
     /**
      * 切点：所有标注了 {@link RequiredDataPermission} 的方法
      */
-    @Pointcut("@annotation(com.hmdp.annotation.RequiredDataPermission)")
+    @Pointcut("@annotation(com.hmdp.permission.annotation.RequiredDataPermission)")
     public void permissionCheckPointcut() {
     }
 
@@ -52,7 +52,7 @@ public class ToolPermissionAspect {
         RequiredDataPermission annotation = method.getAnnotation(RequiredDataPermission.class);
         String resource = annotation.resource();
         DataAction action = annotation.action();
-
+        log.info("权限校验开始 [resource={}, action={}, method={}]", resource, action, method.getName());
         // 2. 从方法参数中提取 ToolContext 和目标资源 ID
         ToolContext toolContext = null;
         Long targetId = null;
@@ -74,10 +74,12 @@ public class ToolPermissionAspect {
         Long currentUserId = (Long) toolContext.getContext().get("userId");
 
         // 4. 校验目标资源 ID
+        //    - CREATE 操作无目标 ID（新资源尚未创建），跳过校验器直接放行
+        //    - READ/UPDATE/DELETE 无目标 ID（如"查自己全部博客"自限查询），同样无需资源归属校验
         if (targetId == null) {
-            log.warn("权限校验失败：方法 {} 缺少目标资源 ID 参数 [userId={}, resource={}, action={}]",
-                    method.getName(), currentUserId, resource, action);
-            return "❌ 无法识别目标数据 ID，操作被拦截";
+            log.info("权限放行：无目标资源 ID [userId={}, resource={}, action={}, method={}]",
+                    currentUserId, resource, action, method.getName());
+            return joinPoint.proceed();
         }
 
         // 5. 通过工厂获取校验器并执行校验
