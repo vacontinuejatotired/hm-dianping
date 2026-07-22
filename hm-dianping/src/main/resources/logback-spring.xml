@@ -107,6 +107,15 @@
     <logger name="com.hmdp.controller" additivity="false">
         <appender-ref ref="CONSOLE" />
     </logger>
+    <logger name="com.hmdp.agent" additivity="false">
+        <appender-ref ref="CONSOLE" />
+    </logger>
+    <logger name="com.hmdp.promptguard" additivity="false">
+        <appender-ref ref="CONSOLE" />
+    </logger>
+    <logger name="com.hmdp.permission" additivity="false">
+        <appender-ref ref="CONSOLE" />
+    </logger>
 
     <!-- Spring框架的日志保持INFO，可以看到启动信息 -->
     <logger name="org.springframework" level="INFO" additivity="false">

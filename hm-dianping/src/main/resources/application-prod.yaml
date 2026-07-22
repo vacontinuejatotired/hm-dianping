@@ -60,6 +60,10 @@ logging:
     com.hmdp.service.impl: DEBUG              # 想看 AuthServiceImpl 日志
     com.hmdp.interceptor: DEBUG               # 想看 Token 拦截器日志
     com.hmdp.controller: WARN                 # Controller 按需调
+    com.hmdp.agent: DEBUG                     # AI Agent 链路（含工具调用）
+    com.hmdp.agent.tool: DEBUG                # 工具注册细节
+    com.hmdp.promptguard: DEBUG               # 守卫策略评估日志
+    com.hmdp.permission: debug                # 数据权限校验日志
     org.springframework.data.redis: WARN
   
 

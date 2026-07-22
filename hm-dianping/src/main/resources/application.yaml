@@ -78,6 +78,20 @@ spring:
               initialize-schema: always
               platform: mariadb
 
+hmdp:
+  prompt-guard:
+    block-tools:
+      - deleteBlog
+    confirm-tools:
+      - publishBlog
+    block-patterns:
+      - toolName: ".*[Dd]elete.*"
+    confirm-patterns:
+      - arguments: ".*admin.*"
+    rate-limit:
+      max-per-session: 30
+      window-seconds: 60
+
 logging:
   level:
     com.hmdp: WARN                            # 其他 hmdp 包安静
@@ -89,6 +103,7 @@ logging:
     com.hmdp.permission: debug
     com.hmdp.agent: DEBUG
     com.hmdp.agent.tool: DEBUG
+    com.hmdp.promptguard: DEBUG
 server:
   servlet:
     encoding:

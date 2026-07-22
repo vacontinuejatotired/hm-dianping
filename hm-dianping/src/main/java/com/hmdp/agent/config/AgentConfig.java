@@ -3,9 +3,12 @@ package com.hmdp.agent.config;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.hmdp.agent.tool.ToolBeanCollector;
 
+import ch.qos.logback.classic.Logger;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -25,6 +28,25 @@ public class AgentConfig {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    @PostConstruct
+    void checkLogLevels() {
+        log.info("========== 日志级别诊断 ==========");
+        String[] checkLoggers = {
+                "com.hmdp",
+                "com.hmdp.agent",
+                "com.hmdp.agent.tool",
+                "com.hmdp.promptguard",
+                "com.hmdp.promptguard.GuardedToolCallback",
+                "com.hmdp.permission",
+        };
+        for (String name : checkLoggers) {
+            Logger l = (Logger) LoggerFactory.getLogger(name);
+            log.info("Logger[{}] level={} effective={} debugEnabled={}",
+                    name, l.getLevel(), l.getEffectiveLevel(), l.isDebugEnabled());
+        }
+        log.info("========== 诊断结束 ==========");
+    }
 
     /**
      * AI 专用线程池（用于流式响应中的异步 AI 调用）
