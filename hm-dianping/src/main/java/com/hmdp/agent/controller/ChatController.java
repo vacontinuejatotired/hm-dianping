@@ -76,9 +76,10 @@ public class ChatController {
             emitter.onTimeout(() -> log.warn("SSE 流超时, content={}", content));
             emitter.onError(ex -> log.error("SSE 流异常, content={}", content, ex));
 
-            // 先推送 conversationId，让前端捕获以便后续请求携带
+            // 先推送 conversationId（JSON 格式，前端据此识别为元事件，不混入回答文本）
             try {
-                emitter.send(SseEmitter.event().data("conversationId:" + conversationId));
+                emitter.send(SseEmitter.event()
+                        .data("{\"type\":\"meta\",\"conversationId\":\"" + conversationId + "\"}"));
             } catch (IOException e) {
                 log.error("推送 conversationId 失败", e);
                 emitter.completeWithError(e);
