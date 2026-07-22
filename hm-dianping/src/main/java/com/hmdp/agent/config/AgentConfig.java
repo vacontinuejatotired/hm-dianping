@@ -15,6 +15,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
 
 @Configuration
 @Slf4j
@@ -22,6 +25,24 @@ public class AgentConfig {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    /**
+     * AI 专用线程池（用于流式响应中的异步 AI 调用）
+     * <p>
+     * 避免使用 ForkJoinPool.commonPool()，防止与项目其他异步任务竞争线程。
+     * </p>
+     */
+    @Bean("aiTaskExecutor")
+    public Executor aiTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("ai-worker-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
 
     /**
      * 对话记忆（用于多轮对话）
@@ -52,7 +73,7 @@ public class AgentConfig {
                         // 对话记忆
                         .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                         // 自动注入所有已包装守卫的 ToolCallback
-                        .defaultTools((Object[]) toolCallbacks)
+                        .defaultToolCallbacks(toolCallbacks)
                         .build();
         log.info("ChatClient 构建完成，注册守卫工具 {} 个", toolCallbacks.length);
 

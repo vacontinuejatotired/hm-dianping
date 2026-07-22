@@ -14,10 +14,14 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import lombok.extern.slf4j.Slf4j;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 
 /**
@@ -51,7 +55,16 @@ public class ChatController {
             "JSON 模式返回 Result 信封；SSE 模式（Accept: text/event-stream）逐段推送 AI 回复 + [DONE] 标记")
     public Object chat(
             @Parameter(description = "聊天内容") @RequestParam String content,
-            @Parameter(description = "客户端期望的响应格式") @RequestHeader(value = "Accept", required = false, defaultValue = "") String accept) {
+            @Parameter(description = "客户端期望的响应格式") @RequestHeader(value = "Accept", required = false, defaultValue = "") String accept,
+            @Parameter(description = "会话 ID（首次不传，后端自动生成并返回）") @RequestParam(required = false) String conversationId) {
+
+        // 首次调用无 conversationId → 自动生成；后续调用由前端传入
+        if (conversationId == null || conversationId.isBlank()) {
+            conversationId = UUID.randomUUID().toString().replace("-", "");
+            log.info("新建会话 [conversationId={}]", conversationId);
+        } else {
+            log.info("续传会话 [conversationId={}]", conversationId);
+        }
 
         // SSE 模式
         if (accept != null && accept.contains(MediaType.TEXT_EVENT_STREAM_VALUE)) {
@@ -63,22 +76,29 @@ public class ChatController {
             emitter.onTimeout(() -> log.warn("SSE 流超时, content={}", content));
             emitter.onError(ex -> log.error("SSE 流异常, content={}", content, ex));
 
+            // 先推送 conversationId，让前端捕获以便后续请求携带
+            try {
+                emitter.send(SseEmitter.event().data("conversationId:" + conversationId));
+            } catch (IOException e) {
+                log.error("推送 conversationId 失败", e);
+                emitter.completeWithError(e);
+                return null;
+            }
+
             // 委托 AiService 异步推送
-            aiService.chatWithToolcall(content, emitter);
+            aiService.chatWithToolcall(content, conversationId, emitter);
             return emitter;
         }
-        String result = "";
-            log.info("JSON 模式：content={}，accept={}", content, accept);
-            result = aiService.chatReturnStringResult(content);
-        
-        return Result.ok(result);
-    }
 
-    @PostMapping("/flux/send")
-    @Operation(summary = "预留 - Flux 模式", hidden = true)
-    public Result postMethodName(@RequestBody String entity) {
-        // TODO: process POST request
-        return Result.ok(entity);
+        // JSON 模式
+        log.info("JSON 模式：content={}，accept={}", content, accept);
+        String result = aiService.chatReturnStringResult(content, conversationId);
+
+        // 返回内容 + conversationId，供前端保存并下次传入
+        Map<String, Object> data = new HashMap<>();
+        data.put("content", result);
+        data.put("conversationId", conversationId);
+        return Result.ok(data);
     }
 
 }
