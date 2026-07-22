@@ -1,7 +1,6 @@
 package com.hmdp.interceptor;
 
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.hmdp.config.CookieConfig;
 import com.hmdp.dto.TokenPair;
 import com.hmdp.dto.ValidationResult;
 import com.hmdp.entity.UserinfoCache;
@@ -29,8 +28,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     @Resource
     private AuthService authService;
-    @Resource
-    private CookieConfig cookieConfig;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
     @Resource(name = "userinfoCache")
@@ -131,11 +128,13 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 response.setHeader("X-Token-Refresh", "ok");
                 response.setHeader("authorization", "Bearer " + newPair.getAccessToken());
                 if (newPair.getRefreshToken() != null) {
+                    boolean isSecure = request.isSecure();
+                    String sameSite = isSecure ? "None" : "Lax";
                     response.addHeader("Set-Cookie", String.format(
                             "refresh_token=%s; HttpOnly; %sSameSite=%s; Path=/; MaxAge=%d",
                             newPair.getRefreshToken(),
-                            cookieConfig.isSecure() ? "Secure; " : "",
-                            cookieConfig.getSameSite(),
+                            isSecure ? "Secure; " : "",
+                            sameSite,
                             7 * 24 * 60 * 60
                     ));
                 }

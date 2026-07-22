@@ -2,7 +2,6 @@ package com.hmdp.controller;
 
 
 import cn.hutool.core.bean.BeanUtil;
-import com.hmdp.config.CookieConfig;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.PasswordChangeDTO;
 import com.hmdp.dto.ProfileUpdateDTO;
@@ -26,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Set;
@@ -53,8 +53,6 @@ public class UserController {
     @Resource
     private CacheClient cacheClient;
     @Resource
-    private CookieConfig cookieConfig;
-    @Resource
     private FileService fileService;
 
     private static final Set<String> ALLOWED_ICON_TYPES = Set.of("jpg", "jpeg", "png", "gif", "webp");
@@ -79,10 +77,11 @@ public class UserController {
     @Operation(summary = "用户登录", description = "支持验证码登录或密码登录，返回Token对")
     public Result login(
             @Parameter(description = "登录表单") @RequestBody LoginFormDTO loginForm,
+            HttpServletRequest request,
             HttpServletResponse response) {
         TokenPair tokenPair = userService.login(loginForm);
         response.setHeader("authorization", "Bearer " + tokenPair.getAccessToken());
-        setRefreshTokenCookie(response, tokenPair.getRefreshToken());
+        setRefreshTokenCookie(request, response, tokenPair.getRefreshToken());
         return Result.ok();
     }
 
@@ -177,10 +176,11 @@ public class UserController {
     @Operation(summary = "修改密码", description = "修改当前用户密码")
     public Result changePassword(
             @Parameter(description = "密码修改表单") @RequestBody PasswordChangeDTO dto,
+            HttpServletRequest request,
             HttpServletResponse response){
         TokenPair tokenPair = userService.changePassword(dto);
         response.setHeader("authorization", "Bearer " + tokenPair.getAccessToken());
-        setRefreshTokenCookie(response, tokenPair.getRefreshToken());
+        setRefreshTokenCookie(request, response, tokenPair.getRefreshToken());
         log.info("密码修改成功 userId={}", UserHolder.getUserId());
         return Result.ok();
     }
@@ -250,20 +250,17 @@ public class UserController {
 
     /**
      * 设置 Refresh Token 到 httpOnly Cookie（JS 不可读，自动随请求发送）
-     * SameSite/Secure 从 application-{profile}.yaml 读取
+     * SameSite/Secure 从 application-{profile}.yaml 读取，Secure 标记动态判断：
+     * HTTPS 连接 → 加 Secure；HTTP 连接 → 不加（避免浏览器因 Secure 标志拒绝 HTTP cookie）
      */
-    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refresh_token", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(cookieConfig.isSecure());
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-        // SameSite 属性无法通过标准 Cookie API 设置，需手动追加
+    private void setRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response, String refreshToken) {
+        boolean isSecure = request.isSecure();
+        String sameSite = isSecure ? "None" : "Lax";
         response.addHeader("Set-Cookie", String.format(
                 "%s=%s; HttpOnly; %sSameSite=%s; Path=/; MaxAge=%d",
                 "refresh_token", refreshToken,
-                cookieConfig.isSecure() ? "Secure; " : "",
-                cookieConfig.getSameSite(),
+                isSecure ? "Secure; " : "",
+                sameSite,
                 7 * 24 * 60 * 60
         ));
     }
