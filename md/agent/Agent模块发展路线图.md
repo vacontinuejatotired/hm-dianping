@@ -31,17 +31,18 @@
 ### 1.1 架构成熟度
 
 ```
-          现存代码量        完成度
-Controller     ██████████    100%
-Service        ██████████    100%
-Guard          ██████████    100%
-Permission     ██████████    100%
-Tool 生态      ██░░░░░░░░     20%   (2 个工具，1 个 Demo)
-Agent 核心     ██░░░░░░░░     30%   (单步工具调用，无多步推理)
-流式体验       ██░░░░░░░░     20%   (伪流式，非逐 token)
-测试           ░░░░░░░░░░      0%   (零测试)
-安全审批       ██░░░░░░░░     30%   (CONFIRM 为空壳)
-监控           ░░░░░░░░░░      0%   (只有日志)
+                          Phase 0 前      Phase 0 后
+Controller                ██████████ 100%  ██████████ 100%  ✅ 已清理
+Service                   ██████████ 100%  ██████████ 100%  ✅ 线程池就绪
+Guard                     ██████████ 100%  ██████████ 100%  
+Permission                ██████████ 100%  ██████████ 100%  
+                          ──────────────  ──────────────
+Tool 生态                 ██░░░░░░░░ 20%   ██░░░░░░░░ 20%   → Phase 3
+Agent 核心                ██░░░░░░░░ 30%   ██░░░░░░░░ 30%   → Phase 2
+流式体验                  ██░░░░░░░░ 20%   ██░░░░░░░░ 20%   → Phase 2
+测试                      ░░░░░░░░░░  0%   ░░░░░░░░░░  0%   → Phase 1
+安全审批                  ██░░░░░░░░ 30%   ██░░░░░░░░ 30%   → Phase 1
+监控                      ░░░░░░░░░░  0%   ░░░░░░░░░░  0%   → Phase 4
 ```
 
 ### 1.2 已具备的优势（不要破坏这些）
@@ -56,13 +57,15 @@ Agent 核心     ██░░░░░░░░     30%   (单步工具调用，
 
 ### 1.3 必须立即解决的问题
 
-| 问题 | 等级 | 位置 | 现象 |
+| 问题 | 等级 | 状态 | 说明 |
 |------|------|------|------|
-| `PromptGuard.java` 死代码 | 🔴 P0 | `agent/tool/PromptGuard.java` | 定义了 `isSafePrompt()` 但无人调用，BLACKLIST 空转 |
-| `postMethodName` 空 API | 🟡 P2 | `ChatController.java:103-108` | 标注 `@hidden` 的空端点，混淆 API 文档 |
-| `CompletableFuture` 无线程池 | 🟠 P1 | `AiServiceImpl.java:110` | 使用 `ForkJoinPool.commonPool()`，生产场景不安全 |
-| CONFIRM 空壳 | 🔴 P0 | `GuardedToolCallback.java:70-74` | 返回字符串而非真实暂停等待确认 |
-| 流式是伪流式 | 🟠 P1 | `AiServiceImpl.java:115` | `call().content()` 阻塞等待完整结果后一次性推送 |
+| `PromptGuard.java` 死代码 | 🔴 P0 | ✅ Phase 0 已删除 | 源文件已移除 |
+| `postMethodName` 空 API | 🟡 P2 | ✅ Phase 0 已删除 | 空方法已移除 |
+| `CompletableFuture` 无线程池 | 🟠 P1 | ✅ Phase 0 已修复 | `AgentConfig` 已配置 `aiTaskExecutor` 并注入 |
+| SSE JSON 注入漏洞 | 🟠 P1 | ✅ Phase 0 已修复 | `escapeJson()` 已用于 `hookResult.getReason()` |
+| SSE conversationId 推送失败 | 🟠 P1 | ✅ Phase 0 已修复 | `completeWithError` + `return null` |
+| CONFIRM 空壳 | 🔴 P0 | 📅 Phase 1 | 需要真实的审批确认机制 |
+| 流式是伪流式 | 🟠 P1 | 📅 Phase 2 | 需要 `stream()` 真流式 + SSE 事件类型 |
 
 ---
 
@@ -615,114 +618,56 @@ Phase 5  ─── 智能数据结构
 
 > 注意：本节及后续章节编号已从原始路线图 +1，因新增了第 3 节"数据模型现状与重构"。
 
+> **Phase 0 验收状态: ✅ 全部完成 (2026-07-22)**  
+> 以下 6 项任务均已实施，代码审查通过。
+
 **目标**: 消除死代码、修复已知缺陷，让现有系统健康运行。
 
-### 3.1 删除死代码
+### 4.1 删除死代码
 
-#### 🔧 Task 0.1 — 删除 `PromptGuard.java`
+#### ✅ Task 0.1 — 删除 `PromptGuard.java`
 
-**文件**: `hm-dianping/src/main/java/com/hmdp/agent/tool/PromptGuard.java`
+**文件**: ~~`hm-dianping/src/main/java/com/hmdp/agent/tool/PromptGuard.java`~~（已删除）
 
-这个文件中的 `isSafePrompt()` 方法没有被任何代码调用。真正的守卫系统在 `promptguard/` 包中。该文件造成了维护者的认知负担——新来的人会疑惑"到底哪个守卫在生效"。
+**验收结果**: 源文件已不存在，target 中的 `.class` 残留不影响运行，下次 `mvn clean` 后自动清除。
 
-**操作**: 删除整个文件。`BLACKLIST` 中的关键字安全策略由 `PatternMatchPolicy` 通过 YAML 配置覆盖。
+#### ✅ Task 0.2 — 删除空端点
 
-#### 🔧 Task 0.2 — 删除空端点
+**文件**: ~~`hm-dianping/src/main/java/com/hmdp/agent/controller/ChatController.java:103-108`~~（已删除）
 
-**文件**: `hm-dianping/src/main/java/com/hmdp/agent/controller/ChatController.java:103-108`
+**验收结果**: `postMethodName()` 空方法已被移除，文件末尾于 `chat()` 方法正确结束后闭合。
 
-```
-删除 postMethodName() 方法（标注 @hidden 的空壳）
-Flux 模式如果未来需要，开新端点而非留一个空方法占位
-```
+#### ✅ Task 0.3 — 统一代码注释风格
 
-#### 🔧 Task 0.3 — 统一代码注释风格
+**验收结果**: `PromptGuard.java` 已删除，其设计笔记同步清理。其余文件（ChatController、AiServiceImpl、AgentConfig）的注释均已采用规范的 Javadoc 风格，无设计草稿残留。
 
-`PromptGuard.java` 中保留了设计阶段的思考草稿：
-```java
-//1.明确的拒绝列表
-//2.匹配用户自定义拒绝规则
-//3.根据结果决定是直接调用还是让用户审批之后再调用
-```
+### 4.2 修复已知缺陷
 
-这些是设计笔记，不是代码注释。全部清理。
+#### ✅ Task 0.4 — 配置 AI 专用线程池
 
-### 3.2 修复已知缺陷
+**验收结果**:
+- `AgentConfig.java` 已配置 `aiTaskExecutor` Bean（core=2, max=4, 队列=100, CallerRunsPolicy, 前缀 `ai-worker-`）
+- `AiServiceImpl.java` 已通过 `@Resource(name = "aiTaskExecutor")` 注入
+- `CompletableFuture.runAsync(..., aiTaskExecutor)` 已替换默认的 `ForkJoinPool.commonPool()`
 
-#### 🔧 Task 0.4 — 配置 AI 专用线程池
+#### ✅ Task 0.5 — SSE 错误推送避免 JSON 注入
 
-**问题**: `AiServiceImpl.chatWithToolcall()` 使用 `CompletableFuture.runAsync()` 默认的 `ForkJoinPool.commonPool()`。
+**验收结果**: `AiServiceImpl.java:102` 已使用 `escapeJson(hookResult.getReason())`，特殊字符被正确转义。
 
-**风险**:
-- 线程数 = CPU 核数 - 1，高并发下很快耗尽
-- 与项目其他异步任务竞争线程
-- `commonPool()` 被阻塞会影响 JVM 全局
+#### ✅ Task 0.6 — SSE 推送 conversationId 的错误处理
 
-**修复**:
+**验收结果**: `ChatController.java:82-86` 已实现 `completeWithError(e)` + `return null`，推送失败时及时终止请求。
 
-```java
-// SchedulingThreadConfig.java 或 AgentConfig.java
-@Bean("aiTaskExecutor")
-public Executor aiTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setQueueCapacity(100);
-    executor.setThreadNamePrefix("ai-worker-");
-    executor.setRejectedExecutionHandler(new CallerRunsPolicy());
-    executor.initialize();
-    return executor;
-}
-```
+### 4.3 Phase 0 验收标准
 
-然后在 `AiServiceImpl` 中注入并使用：
+- [x] `PromptGuard.java` 已删除
+- [x] 空端点 `postMethodName` 已删除
+- [x] AI 专用线程池已配置并注入
+- [x] SSE JSON 注入漏洞已修复
+- [x] SSE conversationId 推送失败时及时终止
+- [x] 项目可正常编译、启动
 
-```java
-@Resource(name = "aiTaskExecutor")
-private Executor aiTaskExecutor;
-
-// chatWithToolcall 中:
-CompletableFuture.runAsync(() -> { ... }, aiTaskExecutor);
-```
-
-#### 🔧 Task 0.5 — SSE 错误推送避免 JSON 注入
-
-**文件**: `AiServiceImpl.java:97`
-
-```java
-emitter.send(SseEmitter.event()
-    .data("{\"error\":\"" + hookResult.getReason() + "\",\"code\":5001}"));
-```
-
-`hookResult.getReason()` 可能包含特殊字符（引号、换行符），直接拼接会破坏 JSON。你已经有 `escapeJson()` 方法，这里漏用了。
-
-**修复**: 使用 `escapeJson(hookResult.getReason())`。
-
-#### 🔧 Task 0.6 — SSE 推送 conversationId 的错误处理
-
-**文件**: `ChatController.java:81-85`
-
-推送 `conversationId` 失败时只打了日志，但前端没有收到 conversationId 会导致后续请求无法关联会话。
-
-**修复**:
-```java
-try {
-    emitter.send(SseEmitter.event().data("conversationId:" + conversationId));
-} catch (IOException e) {
-    log.error("推送 conversationId 失败", e);
-    emitter.completeWithError(e);  // 关键修复：失败要及时终止
-    return;  // 不再继续执行
-}
-```
-
-### 3.3 Phase 0 验收标准
-
-- [ ] `PromptGuard.java` 已删除
-- [ ] 空端点 `postMethodName` 已删除
-- [ ] AI 专用线程池已配置并注入
-- [ ] SSE JSON 注入漏洞已修复
-- [ ] SSE conversationId 推送失败时及时终止
-- [ ] 项目可正常编译、启动
+> **验收结论**: Phase 0 全部 6 项任务已完成。代码已清理，已知缺陷已修复，系统具备继续迭代的基础。
 
 ---
 
@@ -730,7 +675,7 @@ try {
 
 **目标**: 补测试、补监控、补配置管理，让项目具备可维护性。
 
-### 4.1 测试体系
+### 5.1 测试体系
 
 #### 🔧 Task 1.1 — Guard 层单元测试
 
@@ -782,7 +727,7 @@ try {
 - 验证 SSE 模式推送格式正确
 - 验证工具调用结果正确返回
 
-### 4.2 CONFIRM 审批机制落地
+### 5.2 CONFIRM 审批机制落地
 
 #### 🔧 Task 1.5 — 实现真实 CONFIRM 机制
 
@@ -832,7 +777,7 @@ AiServiceImpl 检测到用户确认意图
 
 **最低成本方案**: 如果以上都太复杂，先把所有 CONFIRM 策略改为 BLOCK，并在 BLOCK 消息中引导用户联系管理员。安全优先。
 
-### 4.3 配置外置
+### 5.3 配置外置
 
 #### 🔧 Task 1.6 — 系统提示词外置
 
@@ -870,7 +815,7 @@ hmdp:
     .build())
 ```
 
-### 4.4 Phase 1 验收标准
+### 5.4 Phase 1 验收标准
 
 - [ ] ToolGuardManager + 所有 Policy 有单元测试，覆盖率 > 90%
 - [ ] GuardedToolCallback 有单元测试
@@ -885,7 +830,7 @@ hmdp:
 
 **目标**: 让 Agent 具备多步推理能力，从"调一次工具就完事"进化为"能规划、能迭代、能自主决策"。
 
-### 5.1 核心概念
+### 6.1 核心概念
 
 **当前模式（Function Calling）**:
 
@@ -899,7 +844,7 @@ hmdp:
 用户输入 → LLM(思考 → 行动 → 观察 → 思考 → 行动 → ... → 综合 → 回复)
 ```
 
-### 5.2 技术选型
+### 6.2 技术选型
 
 Spring AI 1.1.2 支持以下 Agent 模式：
 
@@ -911,7 +856,7 @@ Spring AI 1.1.2 支持以下 Agent 模式：
 
 **推荐**: 先做 **ReAct**，这是最成熟的 Agent 模式。
 
-### 5.3 ReAct 实现方案
+### 6.3 ReAct 实现方案
 
 #### ReAct 循环流程
 
@@ -1070,7 +1015,7 @@ chatClient.prompt()
 
 **注意事项**: Spring AI 1.1.2 的流式 + 工具调用有已知复杂性（text chunk 和 tool call 穿插），需要充分测试。
 
-### 5.4 Phase 2 验收标准
+### 6.4 Phase 2 验收标准
 
 - [ ] ReAct Agent 基类实现，支持多步推理循环
 - [ ] `maxIterations` 防死循环机制生效
@@ -1086,7 +1031,7 @@ chatClient.prompt()
 
 **目标**: 丰富工具生态，让 Agent 真正能处理核心业务。
 
-### 6.1 工具优先级矩阵
+### 7.1 工具优先级矩阵
 
 | 工具 | 优先级 | 复杂度 | 业务价值 | 依赖 |
 |------|--------|--------|---------|------|
@@ -1098,7 +1043,7 @@ chatClient.prompt()
 | `MapQueryTool` | P2 | ⭐⭐⭐ | 中 — 体验提升 | 地图 API |
 | `CouponTool` | P2 | ⭐⭐ | 中 — 营销场景 | IVoucherService |
 
-### 6.2 工具实现规范
+### 7.2 工具实现规范
 
 每个工具类必须遵循以下规范：
 
@@ -1132,7 +1077,7 @@ public class ShopQueryTool {
 }
 ```
 
-### 6.3 工具设计原则
+### 7.3 工具设计原则
 
 | 原则 | 说明 | 反例 | 正例 |
 |------|------|------|------|
@@ -1143,7 +1088,7 @@ public class ShopQueryTool {
 | **返回精简** | 返回 LLM 够用的最小字段集 | 返回完整 Entity | 返回 DTO 或精简列表 |
 | **幂等设计** | 查询幂等，写入考虑重试 | 每次调用副作用不同 | 幂等 key 或唯一约束 |
 
-### 6.4 工具之间的协作模式
+### 7.4 工具之间的协作模式
 
 Agent 需要多个工具协作完成复杂任务：
 
@@ -1168,7 +1113,7 @@ Agent 推理过程:
 
 这需要 **多个工具串行调用**，也就是 Phase 2 的 ReAct 能力 + Phase 3 的工具生态一起发挥作用。
 
-### 6.5 工具测试
+### 7.5 工具测试
 
 每个工具必须有：
 
@@ -1203,7 +1148,7 @@ class ShopQueryToolTest {
 }
 ```
 
-### 6.6 系统提示词升级
+### 7.6 系统提示词升级
 
 工具多了之后，系统提示词需要动态构造，让 LLM 知道每个工具的用途和调用场景：
 
@@ -1233,7 +1178,7 @@ String toolsDescription = Arrays.stream(toolCallbacks)
     .collect(Collectors.joining("\n"));
 ```
 
-### 6.7 Phase 3 验收标准
+### 7.7 Phase 3 验收标准
 
 - [ ] ShopQueryTool 实现（搜索 + 推荐）
 - [ ] VoucherQueryTool 实现
@@ -1249,7 +1194,7 @@ String toolsDescription = Arrays.stream(toolCallbacks)
 
 **目标**: 让 Agent 模块达到生产部署标准。
 
-### 7.1 可观测性
+### 8.1 可观测性
 
 #### 🔧 Task 4.1 — AI 调用链路追踪
 
@@ -1293,7 +1238,7 @@ public class TokenUsageTracker {
 }
 ```
 
-### 7.2 对话记忆升级
+### 8.2 对话记忆升级
 
 #### 🔧 Task 4.3 — JDBC → Redis 迁移
 
@@ -1325,7 +1270,7 @@ public ChatMemory chatMemory(RedisTemplate<String, Object> redisTemplate) {
 2. 保留最新 N/2 条完整消息
 3. 每次请求时：`[摘要] + [最近完整消息]`
 
-### 7.3 错误处理与容错
+### 8.3 错误处理与容错
 
 #### 🔧 Task 4.4 — 分级降级策略
 
@@ -1354,7 +1299,7 @@ emitter.onError(ex -> {
 });
 ```
 
-### 7.4 性能优化
+### 8.4 性能优化
 
 #### 🔧 Task 4.6 — 连接池监控
 
@@ -1397,7 +1342,7 @@ public Shop queryShopById(@ToolParam(description = "店铺ID") Long id, ToolCont
 }
 ```
 
-### 7.5 Phase 4 验收标准
+### 8.5 Phase 4 验收标准
 
 - [ ] Prometheus + Grafana 监控面板就绪（调用量、延迟、Token 消耗、错误率）
 - [ ] Redis ChatMemory 上线且摘要压缩生效
@@ -1413,7 +1358,7 @@ public Shop queryShopById(@ToolParam(description = "店铺ID") Long id, ToolCont
 
 **目标**: 让 Agent 从"能用"到"好用"再到"聪明"。
 
-### 8.1 RAG 知识库
+### 9.1 RAG 知识库
 
 **场景**: 用户问"你们有哪些优惠活动？" 或 "这家店评分怎么样？"
 
@@ -1438,7 +1383,7 @@ Agent: "最近的优惠活动有：1. 海底捞满200减50（到8月底）2. ...
 - Embedding: DashScope 的 text-embedding 系列
 - 摄取管道: 定时任务同步店铺、活动信息到向量库
 
-### 8.2 长期记忆
+### 9.2 长期记忆
 
 **场景**: 用户上次说"我对辣的感兴趣"，下次回来 Agent 记得。
 
@@ -1469,7 +1414,7 @@ public class LongTermMemory {
 }
 ```
 
-### 8.3 多 Agent 协作
+### 9.3 多 Agent 协作
 
 **场景**: 一个 Agent 处理推荐，一个 Agent 处理订单，一个 Agent 处理售后。
 
@@ -1483,13 +1428,13 @@ public class LongTermMemory {
 
 协作方式：**Orchestrator Agent** 接收用户输入，分派给专业 Agent，汇总结果。
 
-### 8.4 持续学习
+### 9.4 持续学习
 
 - **用户反馈回路**: 用户对推荐结果点赞/差评 → 调整推荐权重
 - **工具调用分析**: 哪些工具被频繁调用？哪些调用模式暴露了工具设计缺陷？
 - **误拦截分析**: Guard 拦截中有多少是误杀？定期 review 优化策略
 
-### 8.5 Phase 5 验收标准
+### 9.5 Phase 5 验收标准
 
 - [ ] RAG 知识库上线，覆盖店铺信息、优惠活动
 - [ ] 长期记忆让跨会话偏好传递
