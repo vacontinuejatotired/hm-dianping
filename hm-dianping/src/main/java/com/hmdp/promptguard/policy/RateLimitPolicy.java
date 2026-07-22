@@ -46,12 +46,12 @@ public class RateLimitPolicy implements ToolGuardPolicy {
             return Vote.ABSTAIN;
         }
 
-        String sessionId = context.getSessionId();
-        if (sessionId == null || sessionId.isBlank()) {
+        String conversationId = context.getConversationId();
+        if (conversationId == null || conversationId.isBlank()) {
             return Vote.ABSTAIN; // 无会话 ID 无法限流
         }
 
-        String key = KEY_PREFIX + sessionId;
+        String key = KEY_PREFIX + conversationId;
         try {
             Long count = stringRedisTemplate.opsForValue().increment(key);
 
@@ -65,8 +65,8 @@ public class RateLimitPolicy implements ToolGuardPolicy {
             }
 
             if (count > config.getMaxPerSession()) {
-                log.warn("频率限制触发: session={}, count={}, max={}",
-                        sessionId, count, config.getMaxPerSession());
+                log.warn("频率限制触发: conversation={}, count={}, max={}",
+                        conversationId, count, config.getMaxPerSession());
                 return Vote.BLOCK;
             }
         } catch (Exception e) {

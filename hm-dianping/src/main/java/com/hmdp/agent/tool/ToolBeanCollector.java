@@ -23,6 +23,13 @@ import java.util.UUID;
  * 并将其转换为 {@link ToolCallback} 数组，每个回调由 {@link GuardedToolCallback}
  * 包装以插入守卫逻辑。
  * <p>
+ * 替代手动在 {@code AgentConfig} 中逐个注册，新增工具类时只需：
+ * <ol>
+ *   <li>在类上标注 {@code @TargetTool}（已含 {@code @Component} 语义）；</li>
+ *   <li>在方法上标注 {@code @Tool}。</li>
+ * </ol>
+ * 无需修改配置代码。
+ * <p>
  * 使用示例（AgentConfig）：
  * <pre>{@code
  * .defaultTools(toolBeanCollector.getToolCallbacks())
@@ -37,10 +44,10 @@ import java.util.UUID;
 public class ToolBeanCollector implements ApplicationContextAware {
 
     private ToolCallback[] toolCallbacks = new ToolCallback[0];
-    private final ToolGuardManager guardManager;
+    private ToolGuardManager guardManager;
 
-    /** 当前会话 ID（每轮对话更新一次） */
-    private volatile String sessionId = UUID.randomUUID().toString().replace("-", "");
+    /** 每轮对话分配一个 conversationId，AiServiceImpl 可在调用前更新 */
+    private volatile String conversationId = UUID.randomUUID().toString().replace("-", "");
 
     public ToolBeanCollector(ToolGuardManager guardManager) {
         this.guardManager = guardManager;
@@ -56,12 +63,19 @@ public class ToolBeanCollector implements ApplicationContextAware {
             TargetTool annotation = resolveAnnotation(bean);
 
             if (annotation != null && annotation.active()) {
-                // 将 Bean 转为 Spring AI 的 ToolCallback 数组（每个 @Tool 方法一个）
-                ToolCallback[] rawArray = ToolCallbacks.from(bean);
-                for (ToolCallback raw : rawArray) {
-                    GuardedToolCallback guarded = new GuardedToolCallback(raw, guardManager, sessionId);
+                // 将 Bean 转为 Spring AI 的 ToolCallback 列表（每个 @Tool 方法一个）
+                List<ToolCallback> rawCallbacks = List.of(ToolCallbacks.from(bean));
+                for (ToolCallback raw : rawCallbacks) {
+                    // 用守卫包装
+                    GuardedToolCallback guarded = new GuardedToolCallback(
+                            raw, guardManager, conversationId, null,
+                            /* returnDirect 由 @Tool 上的 returnDirect 决定
+                               此处无法直接获取，Spring AI 内部处理，默认 false */
+                            false
+                    );
                     collected.add(guarded);
-                    log.info("注册工具 [{}] -> GuardedToolCallback", raw.getToolDefinition().name());
+                    log.info("注册工具 [{}] -> GuardedToolCallback",
+                            raw.getToolDefinition().name());
                 }
             } else if (annotation != null) {
                 log.info("跳过已停用的工具 Bean [{}]: {}", entry.getKey(), bean.getClass().getSimpleName());
@@ -69,29 +83,35 @@ public class ToolBeanCollector implements ApplicationContextAware {
         }
 
         this.toolCallbacks = collected.toArray(new ToolCallback[0]);
-        log.info("工具回调收集完成，共 {} 个", toolCallbacks.length);
+        log.info("工具回调收集完成，共 {} 个（激活 {}）", toolCallbacks.length, collected.size());
     }
 
     /**
      * 返回收集到的所有已包装的 {@link ToolCallback} 数组。
      * <p>
-     * 可传入 {@code ChatClient.Builder.defaultTools(Object...)}。
+     * 可直接传入 {@code ChatClient.Builder.defaultTools(Object...)}。
      */
     public ToolCallback[] getToolCallbacks() {
         return toolCallbacks;
     }
 
-    /** 获取当前会话 ID */
-    public String getSessionId() {
-        return sessionId;
+    /**
+     * 获取当前会话 ID
+     */
+    public String getConversationId() {
+        return conversationId;
     }
 
-    /** 更新会话 ID（新对话开始时调用） */
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
+    /**
+     * 更新会话 ID（新对话开始时由 AiServiceImpl 调用）
+     */
+    public void setConversationId(String conversationId) {
+        this.conversationId = conversationId;
     }
 
-    /** 解析注解（兼容 CGLIB 代理场景） */
+    /**
+     * 解析注解（兼容 CGLIB 代理场景）
+     */
     private TargetTool resolveAnnotation(Object bean) {
         TargetTool annotation = bean.getClass().getAnnotation(TargetTool.class);
         if (annotation == null) {

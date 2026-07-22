@@ -21,7 +21,7 @@ public class ToolInvocationContext {
     private final String arguments;
 
     /** 当前会话 ID（用于频率限制等） */
-    private final String sessionId;
+    private final String conversationId;
 
     /** 当前登录用户 ID（可选，部分策略可能参考） */
     private final Long userId;
@@ -32,7 +32,7 @@ public class ToolInvocationContext {
     private ToolInvocationContext(Builder builder) {
         this.toolName = builder.toolName;
         this.arguments = builder.arguments;
-        this.sessionId = builder.sessionId;
+        this.conversationId = builder.conversationId;
         this.userId = builder.userId;
         this.invocationCount = builder.invocationCount;
     }
@@ -41,7 +41,7 @@ public class ToolInvocationContext {
 
     public String getToolName() { return toolName; }
     public String getArguments() { return arguments; }
-    public String getSessionId() { return sessionId; }
+    public String getConversationId() { return conversationId; }
     public Long getUserId() { return userId; }
     public int getInvocationCount() { return invocationCount; }
 
@@ -52,13 +52,13 @@ public class ToolInvocationContext {
     public static class Builder {
         private String toolName;
         private String arguments;
-        private String sessionId;
+        private String conversationId;
         private Long userId;
         private int invocationCount;
 
         public Builder toolName(String toolName) { this.toolName = toolName; return this; }
         public Builder arguments(String arguments) { this.arguments = arguments; return this; }
-        public Builder sessionId(String sessionId) { this.sessionId = sessionId; return this; }
+        public Builder conversationId(String conversationId) { this.conversationId = conversationId; return this; }
         public Builder userId(Long userId) { this.userId = userId; return this; }
         public Builder invocationCount(int invocationCount) { this.invocationCount = invocationCount; return this; }
         public ToolInvocationContext build() { return new ToolInvocationContext(this); }
