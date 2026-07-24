@@ -68,7 +68,7 @@ spring:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY}
       enabled: true
-      
+
       chat:
         model: qwen-plus-2025-07-28
         api-base: https://ws-mhs2k50uiwwwvefx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
@@ -95,15 +95,10 @@ hmdp:
 logging:
   level:
     com.hmdp: WARN                            # 其他 hmdp 包安静
-    com.hmdp.service.impl: DEBUG              # 想看 AuthServiceImpl 日志
-    com.hmdp.interceptor: DEBUG               # 想看 Token 拦截器日志
-    com.hmdp.controller: WARN                 # Controller 按需调
-    org.springframework.data.redis: WARN
-    com.hmdp.config: debug
-    com.hmdp.permission: debug
-    com.hmdp.agent: DEBUG
-    com.hmdp.agent.tool: DEBUG
-    com.hmdp.promptguard: DEBUG
+    com.hmdp.agent: DEBUG                     # AI Agent 主链路
+    com.hmdp.agent.tool: DEBUG                # 工具调用细节
+    com.hmdp.promptguard: DEBUG               # 守卫拦截器
+    com.hmdp.prompthook: DEBUG                # Hook 链执行
 server:
   servlet:
     encoding:
