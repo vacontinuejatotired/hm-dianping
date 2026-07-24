@@ -197,38 +197,18 @@ public class AuthServiceImpl implements AuthService {
      */
     private TokenPair doExpiredRefresh(String accessToken, String refreshToken, Long userId, Long oldVersion) {
         String newRefreshToken = cn.hutool.core.lang.UUID.randomUUID().toString().replace("-", "");
-        Long newVersion = redisIdWorker.nextVersion();
+        Long newVersion = oldVersion;
         String newToken = jwtUtil.generateToken(userId,
                 RedisConstants.LOGIN_JWT_TTL_MINUTES, ChronoUnit.MINUTES, newVersion);
+        // 不 bump version（复用旧版本），分布式锁已防并发竞态，直接 SET 无需 Lua
+        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_USER_KEY + userId,
+                newToken, 30, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_REFRESH_USER_KEY + userId,
+                newRefreshToken, 7, TimeUnit.DAYS);
 
-        List<String> args = new ArrayList<>();
-        args.add(refreshToken);
-        args.add(newRefreshToken);
-        args.add(String.valueOf(TimeUnit.DAYS.toSeconds(7)));
-        args.add(newToken);
-        args.add(String.valueOf(TimeUnit.MINUTES.toSeconds(RedisConstants.LOGIN_JWT_TTL_MINUTES)));
-        args.add(oldVersion.toString());
-        args.add(RedisConstants.LOGIN_REFRESHTOKEN_TTL_SECONDS.toString());
-        args.add(newVersion.toString());
-        args.add(RedisConstants.NEW_VERSION_TTL_SECONDS.toString());
-
-        List<String> keys = Arrays.asList(
-                RedisConstants.LOGIN_REFRESH_USER_KEY + userId,
-                RedisConstants.LOGIN_USER_KEY + userId,
-                RedisConstants.LOGIN_VALID_VERSION_KEY + userId,
-                RedisConstants.CURRENT_TOKEN_VERSION_KEY + userId
-        );
-
-        Long luaResult = stringRedisTemplate.execute(refreshDeadTokenScript, keys, args.toArray());
-
-        if (TokenRefreshCode.SUCCESS.getCode().equals(luaResult)) {
-            log.info("过期刷新成功 userId={}, newVersion={}", userId, newVersion);
-            updateLocalVersionCache(userId, newVersion);
-            return new TokenPair(newToken, newRefreshToken, newVersion);
-        }
-
-        log.warn("过期刷新失败, userId={}, code={}", userId, TokenRefreshCode.getDefaultMessage(luaResult));
-        return null;
+        updateLocalVersionCache(userId, oldVersion);
+        log.info("过期刷新成功 userId={}, version={} (不变)", userId, oldVersion);
+        return new TokenPair(newToken, newRefreshToken, oldVersion);
     }
 
     // ==================== 登出 ====================

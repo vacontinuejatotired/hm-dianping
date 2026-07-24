@@ -2,9 +2,12 @@ package com.hmdp.utils;
 
 import com.hmdp.dto.UserDTO;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 用户持有者 — 通过 ThreadLocal 存储当前登录用户信息（用户ID + UserDTO）
  */
+@Slf4j
 public class UserHolder {
     private static final ThreadLocal<Long> tl = new ThreadLocal<>();
 
@@ -14,6 +17,10 @@ public class UserHolder {
     }
 
     public static Long getUserId(){
+        if(tl.get() == null){
+            throw new IllegalArgumentException("用户ID不存在");
+        }
+        log.info("getUserId: {}", tl.get());
         return tl.get();
     }
 

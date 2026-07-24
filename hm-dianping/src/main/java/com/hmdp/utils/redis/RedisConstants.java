@@ -45,4 +45,15 @@ public class RedisConstants {
     public static final int LOGIN_FAIL_COUNT_LOCK = 10;      // 连续 10 次锁定
     public static final String LOGIN_LOCK_KEY = "login:lock:";
     public static final Long LOGIN_LOCK_TTL = 1800L;         // 30 分钟
+
+    // 关注模块
+    public static final String FOLLOWS_KEY = "follows:";
+    public static final String FOLLOWERS_KEY = "followers:";
+    public static final String FOLLOWS_EMPTY_KEY = "follows:empty:";
+    public static final String USER_EXISTS_KEY = "user:exists:";
+    public static final String LOCK_FOLLOW_KEY = "lock:follow:";
+    public static final Long FOLLOWS_TTL = 3600L;            // 1 小时
+    public static final Long FOLLOWS_EMPTY_TTL = 10L;        // 10 秒
+    public static final Long USER_EXISTS_TTL = 10L;          // 10 秒
+    public static final Long LOCK_FOLLOW_TTL = 10L;          // 10 秒
 }

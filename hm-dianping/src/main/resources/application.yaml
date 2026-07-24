@@ -59,7 +59,46 @@ spring:
     active: prod
   application:
     name: hmdp
+  ai:
+    chat:
+      client:
+      ##允许多个模型，每个模型都有自己的配置
+        enabled: false
+    ##下面是阿里巴巴的配置
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+      enabled: true
 
+      chat:
+        model: qwen-plus-2025-07-28
+        api-base: https://ws-mhs2k50uiwwwvefx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+        memory:
+          repository:
+            jdbc:
+              initialize-schema: always
+              platform: mariadb
+
+hmdp:
+  prompt-guard:
+    block-tools:
+      - deleteBlog
+    confirm-tools:
+      - publishBlog
+    block-patterns:
+      - toolName: ".*[Dd]elete.*"
+    confirm-patterns:
+      - arguments: ".*admin.*"
+    rate-limit:
+      max-per-session: 30
+      window-seconds: 60
+
+logging:
+  level:
+    com.hmdp: WARN                            # 其他 hmdp 包安静
+    com.hmdp.agent: DEBUG                     # AI Agent 主链路
+    com.hmdp.agent.tool: DEBUG                # 工具调用细节
+    com.hmdp.promptguard: DEBUG               # 守卫拦截器
+    com.hmdp.prompthook: DEBUG                # Hook 链执行
 server:
   servlet:
     encoding:
