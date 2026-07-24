@@ -1,7 +1,10 @@
 package com.hmdp.agent.service.impl;
 
+import com.hmdp.agent.response.AiResponseRouter;
 import com.hmdp.agent.service.AiService;
 import com.hmdp.agent.tool.ToolBeanCollector;
+import com.hmdp.agent.util.SseUtils;
+import com.hmdp.prompthook.AfterAiHookChain;
 import com.hmdp.prompthook.ChatContext;
 import com.hmdp.prompthook.HookResult;
 import com.hmdp.prompthook.PromptHookChain;
@@ -17,8 +20,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -39,11 +40,14 @@ public class AiServiceImpl implements AiService {
     @Resource
     private ToolBeanCollector toolBeanCollector;
 
+    @Resource
+    private AfterAiHookChain afterAiHookChain;
+
+    @Resource
+    private AiResponseRouter responseRouter;
+
     @Resource(name = "aiTaskExecutor")
     private Executor aiTaskExecutor;
-
-    private String END = "[DONE]";
-
 
     @Override
     public String chatReturnStringResult(String content, String conversationId) {
@@ -96,41 +100,42 @@ public class AiServiceImpl implements AiService {
         // 3. 处理决策（仍在主线程）
         String finalContent = processHookResult(hookResult, content, conversationId);
         if (finalContent == null) {
-            // BLOCK：推送错误后结束 SSE
-            try {
-                emitter.send(SseEmitter.event()
-                        .data("{\"error\":\"" + escapeJson(hookResult.getReason()) + "\",\"code\":5001}"));
-                emitter.send(SseEmitter.event().data(END));
-                emitter.complete();
-            } catch (IOException e) {
-                log.error("SSE 推送阻断消息失败", e);
-                emitter.completeWithError(e);
-            }
+            SseUtils.safeSend(emitter, SseUtils.errorEvent(hookResult.getReason()));
+            emitter.complete();
             return;
         }
 
         // 4. 异步执行 AI 调用（使用可能被替换后的 finalContent）
-        String aiContent = finalContent;
         CompletableFuture.runAsync(() -> {
-            try {
-                ChatClientRequestSpec prompt = chatClient.prompt()
-                        .user(aiContent)
-                        .toolContext(Map.of("userId", userId, "conversationId", conversationId));
-                String result = prompt.call().content();
-                log.info("工具调用完成, result={}", result);
-
-                emitter.send(SseEmitter.event().data(escapeJson(result)));
-                emitter.complete();
-            } catch (Exception e) {
-                log.error("AI SSE 工具调用异常", e);
+            int maxAttempts = 3;
+            Exception lastError = null;
+            String currentContent = finalContent;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    emitter.send(SseEmitter.event()
-                            .data("{\"error\":\"" + escapeJson(e.getMessage()) + "\",\"code\":5001}"));
-                    emitter.complete();
-                } catch (IOException ex) {
-                    emitter.completeWithError(ex);
+                    ChatClientRequestSpec prompt = chatClient.prompt()
+                            .user(currentContent);
+                    String result = prompt.call().content();
+                    log.info("[Phase1] AI 初次回复, result={}", result);
+
+                    // 后处理：AfterAiHookChain → AiResponseRouter
+                    HookResult afterResult = afterAiHookChain.execute(finalContent, result, ctx);
+                    responseRouter.route(afterResult, finalContent, result, ctx, emitter);
+                    return; // 成功，退出
+                } catch (Exception e) {
+                    lastError = e;
+                    log.warn("AI 调用失败 [attempt={}/{}]", attempt, maxAttempts, e);
+                    if (attempt < maxAttempts) {
+                        // 把错误喂给 AI，让 AI 重试生成回复
+                        currentContent = finalContent + "\n\n[系统提示] 上一步调用因以下异常失败，请重试："
+                                + e.getClass().getSimpleName() + ": " + e.getMessage();
+                    }
                 }
             }
+            // 所有重试耗尽，给用户友好提示而非原始异常
+            String friendlyMsg = "抱歉，AI 服务暂时不可用（" + lastError.getMessage() + "），请稍后再试。";
+            SseUtils.safeSend(emitter, SseUtils.progressEvent("merging", "结论生成完成"));
+            SseUtils.safeSend(emitter, SseUtils.errorEvent(friendlyMsg));
+            emitter.complete();
         }, aiTaskExecutor);
     }
 
@@ -165,19 +170,6 @@ public class AiServiceImpl implements AiService {
                 return content;
             }
         }
-    }
-
-    /**
-     * 简易 JSON 转义，防止 error message 中的特殊字符破坏 JSON 格式
-     */
-    private String escapeJson(String s) {
-        if (s == null)
-            return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
 }

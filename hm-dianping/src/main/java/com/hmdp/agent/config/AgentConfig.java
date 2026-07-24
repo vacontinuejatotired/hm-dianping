@@ -67,6 +67,24 @@ public class AgentConfig {
     }
 
     /**
+     * 子任务执行线程池（用于 TaskPlanner 异步规划执行）
+     * <p>
+     * 核心 10 线程，队列 200，满队列由调用者线程执行。
+     * </p>
+     */
+    @Bean("subtaskExecutor")
+    public Executor subtaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(50);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("subtask-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+
+    /**
      * 对话记忆（用于多轮对话）
      */
     @Bean
@@ -90,14 +108,13 @@ public class AgentConfig {
         ChatClient chatClient = ChatClient.builder(chatModel)
                         // 系统提示词
                         .defaultSystem("""
-                                你是电商客服，但当用户问天气时，你必须调用 queryWeather 工具，不要自己回答。
+                                你是智能助手，请直接回答用户问题。
+                                如果用户提到天气，可以说"我来查一下"，后续会通过规划任务执行。
                                 """)
                         // 对话记忆
                         .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                        // 自动注入所有已包装守卫的 ToolCallback
-                        .defaultToolCallbacks(toolCallbacks)
                         .build();
-        log.info("ChatClient 构建完成，注册守卫工具 {} 个", toolCallbacks.length);
+        log.info("ChatClient 构建完成，无默认工具（工具由 TaskPlanner 规划后调用）");
 
         return chatClient;
     }
