@@ -1,4 +1,4 @@
-package com.hmdp.config;
+package com.hmdp.agent.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

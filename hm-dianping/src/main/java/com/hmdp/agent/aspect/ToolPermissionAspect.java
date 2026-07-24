@@ -1,9 +1,9 @@
-package com.hmdp.aspect;
+package com.hmdp.agent.aspect;
 
-import com.hmdp.permission.validator.DataPermissionValidator;
-import com.hmdp.permission.validator.PermissionValidatorFactory;
-import com.hmdp.permission.annotation.RequiredDataPermission;
-import com.hmdp.permission.enums.DataAction;
+import com.hmdp.agent.permission.validator.DataPermissionValidator;
+import com.hmdp.agent.permission.validator.PermissionValidatorFactory;
+import com.hmdp.agent.permission.annotation.RequiredDataPermission;
+import com.hmdp.agent.permission.enums.DataAction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
