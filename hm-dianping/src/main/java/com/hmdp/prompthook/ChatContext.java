@@ -1,5 +1,6 @@
 package com.hmdp.prompthook;
 
+import com.hmdp.agent.task.TaskSnapshot;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.Collections;
@@ -25,6 +26,9 @@ public class ChatContext {
     /** 全量对话历史（不含本轮输入），不可修改 */
     private final List<Message> history;
 
+    /** 任务快照（CONFIRM 续跑用，可变） */
+    private volatile TaskSnapshot pendingSnapshot;
+
     private ChatContext(Builder builder) {
         this.userId = builder.userId;
         this.conversationId = builder.conversationId;
@@ -38,6 +42,13 @@ public class ChatContext {
     public Long getUserId() { return userId; }
     public String getConversationId() { return conversationId; }
     public List<Message> getHistory() { return history; }
+    public TaskSnapshot getPendingSnapshot() { return pendingSnapshot; }
+
+    // ---- setters（仅 mutable 字段） ----
+
+    public void setPendingSnapshot(TaskSnapshot pendingSnapshot) {
+        this.pendingSnapshot = pendingSnapshot;
+    }
 
     // ---- builder ----
 

@@ -16,6 +16,7 @@ import java.util.List;
  * - PASS     —— 放行，不修改任何内容
  * - BLOCK    —— 拦截，携带阻断原因（短路，后续 Hook 不再执行）
  * - REPLACE  —— 替换当前输入文本，可选携带清洗后的历史列表
+ * - PLANNING —— 需要进入任务规划（仅 {@code AfterAiHook} 使用）
  * </pre>
  */
 public class HookResult {
@@ -23,7 +24,8 @@ public class HookResult {
     public enum Decision {
         PASS,
         BLOCK,
-        REPLACE
+        REPLACE,
+        PLANNING
     }
 
     private final Decision decision;
@@ -54,6 +56,7 @@ public class HookResult {
     public boolean isPass() { return decision == Decision.PASS; }
     public boolean isBlock() { return decision == Decision.BLOCK; }
     public boolean isReplace() { return decision == Decision.REPLACE; }
+    public boolean isPlanning() { return decision == Decision.PLANNING; }
 
     // ---- 工厂方法 ----
 
@@ -77,5 +80,10 @@ public class HookResult {
                                                 List<Message> replacedHistory,
                                                 String hookName) {
         return new HookResult(Decision.REPLACE, null, replacedText, replacedHistory, hookName);
+    }
+
+    /** 需要进入任务规划（AfterAiHook 专用） */
+    public static HookResult planningRequired() {
+        return new HookResult(Decision.PLANNING, null, null, null, null);
     }
 }
