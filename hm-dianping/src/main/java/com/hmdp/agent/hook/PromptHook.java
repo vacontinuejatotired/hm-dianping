@@ -1,4 +1,5 @@
-package com.hmdp.prompthook;
+package com.hmdp.agent.hook
+;
 
 /**
  * Prompt 钩子接口

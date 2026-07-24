@@ -1,8 +1,8 @@
-package com.hmdp.prompthook.impl;
+package com.hmdp.agent.hook.impl;
 
-import com.hmdp.prompthook.AfterAiHook;
-import com.hmdp.prompthook.ChatContext;
-import com.hmdp.prompthook.HookResult;
+import com.hmdp.agent.hook.AfterAiHook;
+import com.hmdp.agent.hook.ChatContext;
+import com.hmdp.agent.hook.HookResult;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

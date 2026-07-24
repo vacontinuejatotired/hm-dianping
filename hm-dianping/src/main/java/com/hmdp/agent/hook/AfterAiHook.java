@@ -1,4 +1,4 @@
-package com.hmdp.prompthook;
+package com.hmdp.agent.hook;
 
 /**
  * AI 回复后的后处理 Hook。

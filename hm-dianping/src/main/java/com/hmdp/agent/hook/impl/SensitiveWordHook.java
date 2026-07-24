@@ -1,8 +1,8 @@
-package com.hmdp.prompthook.impl;
+package com.hmdp.agent.hook.impl;
 
-import com.hmdp.prompthook.ChatContext;
-import com.hmdp.prompthook.HookResult;
-import com.hmdp.prompthook.PromptHook;
+import com.hmdp.agent.hook.ChatContext;
+import com.hmdp.agent.hook.HookResult;
+import com.hmdp.agent.hook.PromptHook;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
