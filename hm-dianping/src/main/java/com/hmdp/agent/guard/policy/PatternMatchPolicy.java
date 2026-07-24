@@ -1,10 +1,10 @@
-package com.hmdp.promptguard.policy;
+package com.hmdp.agent.guard.policy;
 
-import com.hmdp.config.PromptGuardProperties.PatternRule;
-import com.hmdp.config.PromptGuardProperties;
-import com.hmdp.promptguard.ToolGuardPolicy;
-import com.hmdp.promptguard.ToolInvocationContext;
-import com.hmdp.promptguard.Vote;
+import com.hmdp.agent.config.PromptGuardProperties.PatternRule;
+import com.hmdp.agent.config.PromptGuardProperties;
+import com.hmdp.agent.guard.ToolGuardPolicy;
+import com.hmdp.agent.guard.ToolInvocationContext;
+import com.hmdp.agent.guard.Vote;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

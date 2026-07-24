@@ -1,4 +1,4 @@
-package com.hmdp.promptguard;
+package com.hmdp.agent.guard;
 
 /**
  * 工具守卫策略的投票结果

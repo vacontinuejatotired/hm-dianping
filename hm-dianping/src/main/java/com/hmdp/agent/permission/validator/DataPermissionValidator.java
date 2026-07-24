@@ -1,6 +1,6 @@
-package com.hmdp.permission.validator;
+package com.hmdp.agent.permission.validator;
 
-import com.hmdp.permission.enums.DataAction;
+import com.hmdp.agent.permission.enums.DataAction;
 
 /**
  * 数据权限校验器接口 — 策略模式

@@ -1,7 +1,7 @@
-package com.hmdp.permission.validator.impl;
+package com.hmdp.agent.permission.validator.impl;
 
-import com.hmdp.permission.enums.DataAction;
-import com.hmdp.permission.validator.DataPermissionValidator;
+import com.hmdp.agent.permission.enums.DataAction;
+import com.hmdp.agent.permission.validator.DataPermissionValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

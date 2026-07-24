@@ -1,4 +1,4 @@
-package com.hmdp.promptguard;
+package com.hmdp.agent.guard;
 
 /**
  * 工具守卫策略 — 对一次工具调用进行风险评估

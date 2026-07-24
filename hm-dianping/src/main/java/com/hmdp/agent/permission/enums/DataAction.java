@@ -1,4 +1,4 @@
-package com.hmdp.permission.enums;
+package com.hmdp.agent.permission.enums;
 
 /**
  * 数据操作动作枚举

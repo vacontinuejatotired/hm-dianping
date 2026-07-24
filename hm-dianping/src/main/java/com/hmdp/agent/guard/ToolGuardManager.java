@@ -1,6 +1,6 @@
-package com.hmdp.promptguard;
+package com.hmdp.agent.guard;
 
-import com.hmdp.promptguard.GuardResult.Decision;
+import com.hmdp.agent.guard.GuardResult.Decision;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
